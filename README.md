@@ -41,7 +41,7 @@ Webhook URLs and signing secrets are credentials. They are never written to logs
 
 This public repository contains **no ATHLTH user data, Home Assistant addresses, webhook IDs, pairing secrets, access tokens, health data or private ATHLTH backend credentials**.
 
-Health-derived data is only sent to the Home Assistant instance selected by the user and only for categories enabled in ATHLTH. The app provides individual sharing controls for workout state, completed workouts, recovery, training load, weekly progress and next workout.
+Health-derived data is only sent to the Home Assistant instance selected by the user and only for categories enabled in ATHLTH. The app provides individual sharing controls for workout state, completed workouts, recovery, training load, sleep, HRV, resting heart rate, respiratory rate, weekly progress, next workout, the full training calendar and active goal data. More sensitive Health metrics, the full training calendar and goal data are off until the user explicitly enables them.
 
 Home Assistant diagnostics intentionally exclude workout values, health values, names, locations and identifiers. Sensitive config-entry values are redacted.
 
@@ -68,6 +68,22 @@ ATHLTH currently exposes:
 The active-workout binary sensor also exposes workout name, type, start time and recording device when available. The last-workout sensor exposes type, duration, distance, end time and recording device. Sleep, HRV, resting heart rate, respiratory rate, recovery and training load are individually controlled from ATHLTH and health-derived sharing is off by default.
 
 Entity values are restored after a Home Assistant restart and refreshed when ATHLTH reconnects.
+
+## Home Assistant features
+
+ATHLTH also provides:
+
+- `calendar.athlth_training` with planned workouts, start/end times and workout type.
+- `event.athlth_events` for workout/recovery/training events that are easier to browse and automate than raw event-bus events.
+- `button.athlth_refresh_athlth_data`, `button.athlth_show_next_workout` and `button.athlth_training_reminder`.
+- `notify.athlth_notification` for messages from Home Assistant to the paired ATHLTH app.
+- Recovery-state, active-goal, goal-progress, days-remaining, training-streak, weekly-workout-count, last-sync and queue-health sensors.
+- A native dashboard example in `examples/dashboard-card.yaml`.
+- Importable automation blueprints under `blueprints/automation/athlth/`.
+
+Home Assistant to ATHLTH commands are not remote-control credentials. They are stored in a small per-client queue and returned only as part of a later HMAC-authenticated ATHLTH webhook response. The app acknowledges command IDs after processing them. This keeps clients isolated and avoids exposing a Home Assistant API token to ATHLTH.
+
+Because iOS controls background execution, queued commands are delivered on the next ATHLTH contact rather than at a guaranteed fixed interval. ATHLTH uses HealthKit background delivery as its primary background wake source and a short BGAppRefresh heartbeat as a fallback on iPhone. Workout and Health changes therefore update Home Assistant without requiring the user to open ATHLTH in normal operation, while iOS may still defer work or suppress background launches after a force-quit.
 
 ## Events
 
@@ -106,6 +122,7 @@ Home Assistant accepts only documented ATHLTH events and payloads up to 64 KiB.
 - Home Assistant: **2026.9.4 or newer**
 - Integration protocol: **1**
 - Signature algorithm: **HMAC-SHA256**
+- iPhone background updates: HealthKit background delivery + BGAppRefresh fallback; execution timing remains controlled by iOS
 
 One Home Assistant instance can pair multiple ATHLTH app installations independently. Each client has its own signing secret and entity set.
 
