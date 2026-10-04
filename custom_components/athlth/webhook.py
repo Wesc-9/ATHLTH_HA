@@ -468,6 +468,7 @@ def _apply_event(
                 "ended_at",
                 now,
             )
+            client.state["last_workout_device"] = payload.get("device")
         client.state.pop("active_workout", None)
         client.state.pop("active_workout_type", None)
         client.state.pop("active_workout_started_at", None)
