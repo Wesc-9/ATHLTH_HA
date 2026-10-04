@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from typing import override
+
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DATA_RUNTIMES, DOMAIN, signal_update
 from .runtime import ATHLTHRuntimeData
@@ -25,12 +29,13 @@ async def async_setup_entry(
     async_add_entities([ATHLTHWorkoutActiveBinarySensor(entry, runtime)])
 
 
-class ATHLTHWorkoutActiveBinarySensor(BinarySensorEntity):
+class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
     """Show whether ATHLTH currently has an active workout."""
 
     _attr_has_entity_name = True
     _attr_name = "Workout active"
     _attr_icon = "mdi:run-fast"
+    _attr_should_poll = False
 
     def __init__(
         self,
@@ -60,8 +65,16 @@ class ATHLTHWorkoutActiveBinarySensor(BinarySensorEntity):
             "last_seen": self._runtime.last_seen,
         }
 
+    @override
     async def async_added_to_hass(self) -> None:
-        """Subscribe to ATHLTH webhook updates."""
+        """Restore the previous value and subscribe to webhook updates."""
+        await super().async_added_to_hass()
+
+        if "workout_active" not in self._runtime.state:
+            restored = await self.async_get_last_state()
+            if restored is not None:
+                self._runtime.state["workout_active"] = restored.state == STATE_ON
+
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
