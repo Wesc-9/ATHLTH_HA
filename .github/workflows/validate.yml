@@ -38,6 +38,13 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        homeassistant:
+          - "2026.9.4"
+          - "2026.10.0b0"
+    name: test-ha-${{ matrix.homeassistant }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,7 +53,10 @@ jobs:
           cache: pip
           cache-dependency-path: requirements_test.txt
       - name: Install test dependencies
-        run: python -m pip install -r requirements_test.txt
+        run: >-
+          python -m pip install
+          -r requirements_test.txt
+          "homeassistant==${{ matrix.homeassistant }}"
       - name: Run tests
         env:
           PYTHONPATH: .
