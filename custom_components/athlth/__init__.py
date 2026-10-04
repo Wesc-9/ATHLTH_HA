@@ -29,7 +29,14 @@ from .webhook import async_handle_webhook
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.CALENDAR,
+    Platform.EVENT,
+    Platform.BUTTON,
+    Platform.NOTIFY,
+]
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -100,6 +107,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     stored_clients_data = await client_store.async_load() or {}
     raw_clients = stored_clients_data.get("clients", {})
+    raw_primary_pending_commands = stored_clients_data.get(
+        "primary_pending_commands",
+        [],
+    )
+    primary_pending_commands = (
+        [
+            command
+            for command in raw_primary_pending_commands
+            if isinstance(command, dict)
+        ][-16:]
+        if isinstance(raw_primary_pending_commands, list)
+        else []
+    )
 
     clients: dict[str, ATHLTHClientRuntime] = {
         primary_client_id: ATHLTHClientRuntime(
@@ -107,6 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             name=primary_client_name,
             shared_secret=shared_secret,
             delivery_ids=primary_delivery_ids,
+            pending_commands=primary_pending_commands,
             is_primary=True,
         )
     }
@@ -142,12 +163,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if isinstance(raw_additional_delivery_ids, dict)
                 else {}
             )
+            raw_pending_commands = raw_client.get(
+                "pending_commands",
+                [],
+            )
+            pending_commands = (
+                [
+                    command
+                    for command in raw_pending_commands
+                    if isinstance(command, dict)
+                ][-16:]
+                if isinstance(raw_pending_commands, list)
+                else []
+            )
 
             clients[client_id] = ATHLTHClientRuntime(
                 client_id=client_id,
                 name=additional_name,
                 shared_secret=additional_secret,
                 delivery_ids=additional_delivery_ids,
+                pending_commands=pending_commands,
             )
 
     if data != dict(entry.data):
