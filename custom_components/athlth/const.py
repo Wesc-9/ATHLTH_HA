@@ -6,6 +6,8 @@ NAME = "ATHLTH"
 CONF_WEBHOOK_ID = "webhook_id"
 CONF_SHARED_SECRET = "shared_secret"
 CONF_CLOUDHOOK_URL = "cloudhook_url"
+CONF_PRIMARY_CLIENT_ID = "primary_client_id"
+CONF_PRIMARY_CLIENT_NAME = "primary_client_name"
 
 DATA_API_REGISTERED = "api_registered"
 DATA_RUNTIMES = "runtimes"
@@ -13,6 +15,7 @@ DATA_RUNTIMES = "runtimes"
 PAIR_API_PATH = "/api/athlth/pair"
 
 HEADER_TIMESTAMP = "X-ATHLTH-Timestamp"
+HEADER_CLIENT_ID = "X-ATHLTH-Client-ID"
 HEADER_NONCE = "X-ATHLTH-Nonce"
 HEADER_SIGNATURE = "X-ATHLTH-Signature"
 
@@ -58,3 +61,8 @@ RESTORABLE_STATE_KEYS = frozenset(
 def signal_update(entry_id: str) -> str:
     """Return the dispatcher signal used to refresh ATHLTH entities."""
     return f"{DOMAIN}_{entry_id}_update"
+
+
+def signal_client_added(entry_id: str) -> str:
+    """Return the dispatcher signal used when a new ATHLTH client is paired."""
+    return f"{DOMAIN}_{entry_id}_client_added"
