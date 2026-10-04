@@ -1,0 +1,43 @@
+blueprint:
+  name: ATHLTH Workout Mode
+  description: Run chosen Home Assistant actions when an ATHLTH workout starts or stops.
+  domain: automation
+  input:
+    workout_active:
+      name: ATHLTH workout active
+      selector:
+        entity:
+          domain: binary_sensor
+    on_start:
+      name: Actions when workout starts
+      default: []
+      selector:
+        action: {}
+    on_stop:
+      name: Actions when workout stops
+      default: []
+      selector:
+        action: {}
+
+mode: restart
+
+triggers:
+  - trigger: state
+    entity_id: !input workout_active
+    to: "on"
+    id: started
+  - trigger: state
+    entity_id: !input workout_active
+    to: "off"
+    id: stopped
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: started
+        sequence: !input on_start
+      - conditions:
+          - condition: trigger
+            id: stopped
+        sequence: !input on_stop
