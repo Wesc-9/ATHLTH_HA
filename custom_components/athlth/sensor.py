@@ -208,6 +208,9 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     "ended_at": self._client.state.get(
                         "last_workout_ended_at"
                     ),
+                    "device": self._client.state.get(
+                        "last_workout_device"
+                    ),
                 }
             )
 
