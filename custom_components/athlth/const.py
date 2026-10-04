@@ -33,12 +33,31 @@ MAX_NONCE_LENGTH = 128
 SUPPORTED_PROTOCOL_VERSION = 1
 SUPPORTED_SIGNATURE_ALGORITHM = "HMAC-SHA256"
 
+WORKOUT_PHASES = frozenset(
+    {
+        "preparing",
+        "warmup",
+        "active",
+        "rest",
+        "cooldown",
+        "paused",
+        "finished",
+    }
+)
+
 SUPPORTED_EVENTS = frozenset(
     {
         "workout_started",
         "workout_updated",
+        "workout_phase_updated",
         "workout_finished",
         "workout_cancelled",
+        "strength_set_updated",
+        "strength_set_completed",
+        "personal_record",
+        "achievement_unlocked",
+        "goal_completed",
+        "challenge_completed",
         "recovery_updated",
         "training_load_updated",
         "weekly_progress_updated",
@@ -46,6 +65,30 @@ SUPPORTED_EVENTS = frozenset(
         "sync_snapshot",
         "command_ack",
         "unpair",
+    }
+)
+
+LIVE_STATE_KEYS = frozenset(
+    {
+        "workout_phase",
+        "active_workout_elapsed_seconds",
+        "active_workout_distance_meters",
+        "active_workout_pace_seconds_per_km",
+        "active_workout_speed_kmh",
+        "active_workout_heart_rate_bpm",
+        "active_workout_heart_rate_zone",
+        "active_workout_environment",
+        "treadmill_incline_percent",
+        "current_exercise",
+        "current_exercise_index",
+        "current_set",
+        "current_set_index",
+        "current_set_total",
+        "current_reps",
+        "current_weight_kg",
+        "current_resistance_level",
+        "current_rest_seconds",
+        "current_row_distance_meters",
     }
 )
 
@@ -81,6 +124,7 @@ RESTORABLE_STATE_KEYS = frozenset(
         "weekly_workout_count",
         "calendar_events",
         "pending_delivery_count",
+        *LIVE_STATE_KEYS,
     }
 )
 
@@ -98,8 +142,15 @@ def signal_client_added(entry_id: str) -> str:
 USER_EVENT_TYPES = (
     "workout_started",
     "workout_updated",
+    "workout_phase_updated",
     "workout_finished",
     "workout_cancelled",
+    "strength_set_updated",
+    "strength_set_completed",
+    "personal_record",
+    "achievement_unlocked",
+    "goal_completed",
+    "challenge_completed",
     "recovery_updated",
     "training_load_updated",
     "weekly_progress_updated",
