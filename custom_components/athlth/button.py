@@ -113,8 +113,29 @@ class ATHLTHButton(ButtonEntity):
 
     async def async_press(self) -> None:
         """Queue the button command for the next signed ATHLTH sync."""
+        command_type = self.entity_description.command_type
+        title: str | None = None
+        message: str | None = None
+
+        if command_type == "show_next_workout":
+            title = "Next ATHLTH workout"
+            workout = self._client.state.get("next_workout")
+            scheduled = self._client.state.get("next_workout_time")
+            if workout and scheduled:
+                message = f"{workout} · {scheduled}"
+            elif workout:
+                message = str(workout)
+            else:
+                message = "No planned workout is currently available."
+
+        elif command_type == "training_reminder":
+            title = "ATHLTH"
+            message = "Your training reminder from Home Assistant."
+
         await self._runtime.async_enqueue_command(
             self._client.client_id,
-            self.entity_description.command_type,
+            command_type,
+            title=title,
+            message=message,
         )
         async_dispatcher_send(self.hass, signal_update(self._entry_id))
