@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+import secrets
 
 from aiohttp import web
 
-from homeassistant.components import webhook
 from homeassistant.components.http import KEY_HASS, HomeAssistantView, require_admin
 
 from .const import (
+    CONF_SHARED_SECRET,
     DATA_RUNTIMES,
     DOMAIN,
     PAIR_API_PATH,
@@ -43,17 +44,43 @@ class ATHLTHPairView(HomeAssistantView):
             )
 
         runtime = next(iter(runtimes.values()))
-        webhook_url = webhook.async_generate_url(hass, runtime.webhook_id)
+
+        # A successful authenticated pairing rotates the shared secret.
+        # Re-pairing therefore invalidates any previous ATHLTH client secret.
+        shared_secret = secrets.token_urlsafe(48)
+        runtime.shared_secret = shared_secret
+        runtime.nonces.clear()
+
+        entry = hass.config_entries.async_get_entry(runtime.entry_id)
+        if entry is None:
+            return self.json(
+                {
+                    "error": "entry_missing",
+                    "message": "ATHLTH config entry is unavailable.",
+                },
+                status_code=HTTPStatus.CONFLICT,
+            )
+
+        hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **entry.data,
+                CONF_SHARED_SECRET: shared_secret,
+            },
+        )
 
         return self.json(
             {
                 "protocol_version": SUPPORTED_PROTOCOL_VERSION,
                 "client_id": runtime.entry_id,
                 "webhook_id": runtime.webhook_id,
-                "webhook_url": webhook_url,
+                "webhook_url": runtime.webhook_url,
                 "webhook_path": f"/api/webhook/{runtime.webhook_id}",
-                "shared_secret": runtime.shared_secret,
+                "shared_secret": shared_secret,
                 "signature_algorithm": "HMAC-SHA256",
+                "transport": (
+                    "cloudhook" if runtime.uses_cloudhook else "webhook"
+                ),
                 "capabilities": [
                     "workout_started",
                     "workout_updated",
@@ -63,6 +90,7 @@ class ATHLTHPairView(HomeAssistantView):
                     "weekly_progress_updated",
                     "next_workout_updated",
                     "sync_snapshot",
+                    "unpair",
                 ],
             },
             headers={
