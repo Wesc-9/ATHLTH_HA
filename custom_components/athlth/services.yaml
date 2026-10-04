@@ -1,0 +1,89 @@
+sync_now:
+  name: Sync ATHLTH now
+  description: Ask the paired ATHLTH app to refresh its Home Assistant snapshot on its next contact.
+  fields:
+    client_id:
+      name: Client ID
+      description: Optional paired ATHLTH client. Leave empty for the primary client.
+
+show_next_workout:
+  name: Show next workout
+  description: Show the next ATHLTH workout on the paired app.
+  fields:
+    client_id:
+      name: Client ID
+      description: Optional paired ATHLTH client.
+
+send_notification:
+  name: Send ATHLTH notification
+  description: Queue a notification for the paired ATHLTH app.
+  fields:
+    client_id:
+      name: Client ID
+    title:
+      name: Title
+      example: Home Assistant
+    message:
+      name: Message
+      required: true
+      example: The home gym is ready.
+
+open_planned_workout:
+  name: Open planned workout
+  description: Ask ATHLTH to surface a planned workout.
+  fields:
+    client_id:
+      name: Client ID
+    workout_id:
+      name: Workout ID
+      description: Optional ATHLTH calendar or workout id.
+    title:
+      name: Workout title
+      description: Optional fallback title.
+
+schedule_extra_workout:
+  name: Schedule extra workout
+  description: Add a standalone workout in ATHLTH without changing the active training plan.
+  fields:
+    client_id:
+      name: Client ID
+    title:
+      name: Title
+      required: true
+      example: Easy treadmill run
+    scheduled_at:
+      name: Scheduled time
+      required: true
+      example: "2026-10-05T18:00:00+02:00"
+    workout_type:
+      name: Workout type
+      selector:
+        select:
+          options:
+            - running
+            - strength
+            - mobility
+            - custom
+    duration_minutes:
+      name: Duration
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+    notes:
+      name: Notes
+
+move_planned_workout:
+  name: Move standalone workout
+  description: Reschedule a standalone ATHLTH workout. Active-plan sessions are intentionally not changed.
+  fields:
+    client_id:
+      name: Client ID
+    workout_id:
+      name: Workout ID
+      required: true
+    scheduled_at:
+      name: New scheduled time
+      required: true
+      example: "2026-10-06T19:00:00+02:00"
