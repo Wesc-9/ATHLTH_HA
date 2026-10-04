@@ -1,0 +1,22 @@
+blueprint:
+  name: ATHLTH · Recovery evening
+  description: Run a recovery routine when the ATHLTH recovery state changes to recover or take_it_easy.
+  domain: automation
+  input:
+    recovery_sensor:
+      name: ATHLTH recovery state
+      selector:
+        entity:
+          domain: sensor
+    actions:
+      name: Recovery actions
+      selector:
+        action: {}
+trigger:
+  - platform: state
+    entity_id: !input recovery_sensor
+condition:
+  - condition: template
+    value_template: "{{ trigger.to_state.state in ['recover', 'take_it_easy'] }}"
+action: !input actions
+mode: restart
