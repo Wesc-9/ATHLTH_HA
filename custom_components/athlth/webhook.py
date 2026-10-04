@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from http import HTTPStatus
 import json
 import re
 import secrets
@@ -23,13 +24,18 @@ from .const import (
     HEADER_SIGNATURE,
     HEADER_TIMESTAMP,
     MAX_CLOCK_SKEW_SECONDS,
+    MAX_NONCE_LENGTH,
+    MAX_PAYLOAD_BYTES,
     NONCE_TTL_SECONDS,
+    RESTORABLE_STATE_KEYS,
     SIGNATURE_PREFIX,
+    SUPPORTED_EVENTS,
     signal_update,
 )
 from .runtime import ATHLTHRuntimeData
 
 _EVENT_PATTERN = re.compile(r"^[a-z0-9_]{1,64}$")
+_MAX_TEXT_LENGTH = 256
 
 
 async def async_handle_webhook(
@@ -40,32 +46,39 @@ async def async_handle_webhook(
     """Validate and process an ATHLTH webhook request."""
     runtime = _runtime_for_webhook(hass, webhook_id)
     if runtime is None:
-        return web.json_response({"error": "unknown_webhook"}, status=404)
+        return _error("unknown_webhook", HTTPStatus.NOT_FOUND)
+
+    content_length = request.content_length
+    if content_length is not None and content_length > MAX_PAYLOAD_BYTES:
+        return _error("payload_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
 
     timestamp_header = request.headers.get(HEADER_TIMESTAMP)
     nonce = request.headers.get(HEADER_NONCE)
     signature = request.headers.get(HEADER_SIGNATURE)
 
     if not timestamp_header or not nonce or not signature:
-        return web.json_response(
-            {"error": "missing_signature_headers"},
-            status=401,
-        )
+        return _error("missing_signature_headers", HTTPStatus.UNAUTHORIZED)
+
+    if len(nonce) > MAX_NONCE_LENGTH:
+        return _error("invalid_nonce", HTTPStatus.UNAUTHORIZED)
 
     try:
         timestamp = int(timestamp_header)
     except ValueError:
-        return web.json_response({"error": "invalid_timestamp"}, status=401)
+        return _error("invalid_timestamp", HTTPStatus.UNAUTHORIZED)
 
     now = int(time.time())
     if abs(now - timestamp) > MAX_CLOCK_SKEW_SECONDS:
-        return web.json_response({"error": "stale_request"}, status=401)
+        return _error("stale_request", HTTPStatus.UNAUTHORIZED)
 
     _purge_old_nonces(runtime, now)
     if nonce in runtime.nonces:
-        return web.json_response({"error": "replayed_request"}, status=409)
+        return _error("replayed_request", HTTPStatus.CONFLICT)
 
     raw_body = await request.read()
+    if len(raw_body) > MAX_PAYLOAD_BYTES:
+        return _error("payload_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+
     if not _signature_is_valid(
         runtime.shared_secret,
         timestamp_header,
@@ -73,30 +86,27 @@ async def async_handle_webhook(
         raw_body,
         signature,
     ):
-        return web.json_response({"error": "invalid_signature"}, status=401)
+        return _error("invalid_signature", HTTPStatus.UNAUTHORIZED)
 
     try:
         message = json.loads(raw_body or b"{}")
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return web.json_response({"error": "invalid_json"}, status=400)
+        return _error("invalid_json", HTTPStatus.BAD_REQUEST)
 
-    if not isinstance(message, dict):
-        return web.json_response({"error": "invalid_payload"}, status=400)
+    validation_error = _validate_message(message)
+    if validation_error is not None:
+        return _error(validation_error, HTTPStatus.BAD_REQUEST)
 
-    event_type = message.get("event")
+    event_type = message["event"]
     payload = message.get("payload", {})
-
-    if not isinstance(event_type, str) or not _EVENT_PATTERN.fullmatch(event_type):
-        return web.json_response({"error": "invalid_event"}, status=400)
-
-    if not isinstance(payload, dict):
-        return web.json_response({"error": "invalid_payload"}, status=400)
 
     runtime.nonces[nonce] = float(now)
     runtime.last_seen = float(now)
 
     _apply_event(runtime, event_type, payload, now)
 
+    # The event bus is intentionally local to the user's Home Assistant.
+    # Secrets and webhook identifiers are never included in event data.
     hass.bus.async_fire(
         f"{DOMAIN}_{event_type}",
         {
@@ -115,7 +125,17 @@ async def async_handle_webhook(
             "ok": True,
             "event": event_type,
             "server_time": now,
-        }
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+def _error(code: str, status: HTTPStatus) -> web.Response:
+    """Return a cache-safe webhook error."""
+    return web.json_response(
+        {"error": code},
+        status=int(status),
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -142,9 +162,15 @@ def _signature_is_valid(
     body: bytes,
     supplied_signature: str,
 ) -> bool:
-    signature = supplied_signature
+    """Validate an ATHLTH HMAC signature."""
+    signature = supplied_signature.strip().lower()
     if signature.startswith(SIGNATURE_PREFIX):
         signature = signature[len(SIGNATURE_PREFIX) :]
+
+    if len(signature) != 64 or any(
+        character not in "0123456789abcdef" for character in signature
+    ):
+        return False
 
     signed = timestamp.encode() + b"." + nonce.encode() + b"." + body
     expected = hmac.new(
@@ -153,7 +179,82 @@ def _signature_is_valid(
         hashlib.sha256,
     ).hexdigest()
 
-    return hmac.compare_digest(expected, signature.lower())
+    return hmac.compare_digest(expected, signature)
+
+
+def _validate_message(message: object) -> str | None:
+    """Validate the public ATHLTH webhook contract."""
+    if not isinstance(message, dict):
+        return "invalid_payload"
+
+    event_type = message.get("event")
+    payload = message.get("payload", {})
+
+    if not isinstance(event_type, str) or not _EVENT_PATTERN.fullmatch(event_type):
+        return "invalid_event"
+
+    if event_type not in SUPPORTED_EVENTS:
+        return "unsupported_event"
+
+    if not isinstance(payload, dict):
+        return "invalid_payload"
+
+    if not _payload_has_safe_shape(payload):
+        return "invalid_payload"
+
+    if event_type == "recovery_updated":
+        if not _number_in_range(payload.get("score"), 0, 100):
+            return "invalid_recovery_score"
+
+    elif event_type == "training_load_updated":
+        if not _number_in_range(payload.get("load"), 0, 10):
+            return "invalid_training_load"
+
+    elif event_type == "weekly_progress_updated":
+        if not _number_in_range(payload.get("percent"), 0, 100):
+            return "invalid_weekly_progress"
+
+    elif event_type == "sync_snapshot":
+        state = payload.get("state", {})
+        if not isinstance(state, dict):
+            return "invalid_snapshot"
+        if not set(state).issubset(RESTORABLE_STATE_KEYS):
+            return "invalid_snapshot"
+
+    return None
+
+
+def _payload_has_safe_shape(value: object, depth: int = 0) -> bool:
+    """Bound JSON nesting, collection sizes and user-provided text."""
+    if depth > 4:
+        return False
+
+    if value is None or isinstance(value, (bool, int, float)):
+        return True
+
+    if isinstance(value, str):
+        return len(value) <= _MAX_TEXT_LENGTH
+
+    if isinstance(value, list):
+        return len(value) <= 64 and all(
+            _payload_has_safe_shape(item, depth + 1) for item in value
+        )
+
+    if isinstance(value, dict):
+        return len(value) <= 64 and all(
+            isinstance(key, str)
+            and len(key) <= 64
+            and _payload_has_safe_shape(item, depth + 1)
+            for key, item in value.items()
+        )
+
+    return False
+
+
+def _number_in_range(value: object, minimum: float, maximum: float) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return minimum <= float(value) <= maximum
 
 
 def _purge_old_nonces(runtime: ATHLTHRuntimeData, now: int) -> None:
@@ -200,7 +301,9 @@ def _apply_event(
 
     entity_state = payload.get("entity_state")
     if isinstance(entity_state, dict):
-        runtime.state.update(entity_state)
+        for key, value in entity_state.items():
+            if key in RESTORABLE_STATE_KEYS:
+                runtime.state[key] = value
 
     if event_type == "workout_started":
         runtime.state["workout_active"] = True
@@ -213,29 +316,29 @@ def _apply_event(
     elif event_type == "workout_updated":
         runtime.state["workout_active"] = True
 
+    elif event_type == "workout_cancelled":
+        runtime.state["workout_active"] = False
+        runtime.state.pop("active_workout", None)
+
     elif event_type == "workout_finished":
         runtime.state["workout_active"] = False
-        runtime.state["last_workout"] = (
-            payload.get("name")
-            or payload.get("workout_name")
-            or payload.get("type")
-        )
-        runtime.state["last_workout_at"] = payload.get(
-            "ended_at", now
-        )
+        if payload.get("completed", True):
+            runtime.state["last_workout"] = (
+                payload.get("name")
+                or payload.get("workout_name")
+                or payload.get("type")
+            )
+            runtime.state["last_workout_at"] = payload.get("ended_at", now)
         runtime.state.pop("active_workout", None)
 
     elif event_type == "recovery_updated":
-        if "score" in payload:
-            runtime.state["recovery_score"] = payload["score"]
+        runtime.state["recovery_score"] = payload["score"]
 
     elif event_type == "training_load_updated":
-        if "load" in payload:
-            runtime.state["training_load"] = payload["load"]
+        runtime.state["training_load"] = payload["load"]
 
     elif event_type == "weekly_progress_updated":
-        if "percent" in payload:
-            runtime.state["weekly_progress"] = payload["percent"]
+        runtime.state["weekly_progress"] = payload["percent"]
 
     elif event_type == "next_workout_updated":
         runtime.state["next_workout"] = (
@@ -244,6 +347,8 @@ def _apply_event(
         )
 
     elif event_type == "sync_snapshot":
-        snapshot = payload.get("state", payload)
+        snapshot = payload.get("state", {})
         if isinstance(snapshot, dict):
-            runtime.state.update(snapshot)
+            for key, value in snapshot.items():
+                if key in RESTORABLE_STATE_KEYS:
+                    runtime.state[key] = value
