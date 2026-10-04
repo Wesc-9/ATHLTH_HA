@@ -14,7 +14,9 @@ from .const import (
     DATA_RUNTIMES,
     DOMAIN,
     PAIR_API_PATH,
+    SUPPORTED_EVENTS,
     SUPPORTED_PROTOCOL_VERSION,
+    SUPPORTED_SIGNATURE_ALGORITHM,
 )
 from .runtime import ATHLTHRuntimeData
 
@@ -77,21 +79,11 @@ class ATHLTHPairView(HomeAssistantView):
                 "webhook_url": runtime.webhook_url,
                 "webhook_path": f"/api/webhook/{runtime.webhook_id}",
                 "shared_secret": shared_secret,
-                "signature_algorithm": "HMAC-SHA256",
+                "signature_algorithm": SUPPORTED_SIGNATURE_ALGORITHM,
                 "transport": (
                     "cloudhook" if runtime.uses_cloudhook else "webhook"
                 ),
-                "capabilities": [
-                    "workout_started",
-                    "workout_updated",
-                    "workout_finished",
-                    "recovery_updated",
-                    "training_load_updated",
-                    "weekly_progress_updated",
-                    "next_workout_updated",
-                    "sync_snapshot",
-                    "unpair",
-                ],
+                "capabilities": sorted(SUPPORTED_EVENTS),
             },
             headers={
                 "Cache-Control": "no-store",
