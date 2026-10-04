@@ -11,6 +11,13 @@ permissions:
   contents: read
 
 jobs:
+  privacy-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan public repository for private data
+        run: python scripts/privacy_scan.py
+
   validate-hacs:
     runs-on: ubuntu-latest
     steps:
