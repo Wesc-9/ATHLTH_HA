@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from aiohttp import web
 
 from homeassistant.components import webhook
-from homeassistant.components.http import KEY_HASS, HomeAssistantView
-from homeassistant.exceptions import Unauthorized
+from homeassistant.components.http import KEY_HASS, HomeAssistantView, require_admin
 
 from .const import (
     DATA_RUNTIMES,
@@ -18,19 +19,16 @@ from .runtime import ATHLTHRuntimeData
 
 
 class ATHLTHPairView(HomeAssistantView):
-    """Return one-time pairing material to an authenticated ATHLTH client."""
+    """Return pairing material to an authenticated ATHLTH client."""
 
     url = PAIR_API_PATH
     name = "api:athlth:pair"
     requires_auth = True
 
+    @require_admin
     async def post(self, request: web.Request) -> web.Response:
         """Pair the ATHLTH app with this Home Assistant instance."""
         hass = request.app[KEY_HASS]
-        user = request["hass_user"]
-
-        if user is None or not user.is_admin:
-            raise Unauthorized(permission="admin")
 
         runtimes: dict[str, ATHLTHRuntimeData] = (
             hass.data.get(DOMAIN, {}).get(DATA_RUNTIMES, {})
@@ -41,7 +39,7 @@ class ATHLTHPairView(HomeAssistantView):
                     "error": "not_configured",
                     "message": "ATHLTH is not loaded in Home Assistant.",
                 },
-                status_code=409,
+                status_code=HTTPStatus.CONFLICT,
             )
 
         runtime = next(iter(runtimes.values()))
@@ -66,5 +64,9 @@ class ATHLTHPairView(HomeAssistantView):
                     "next_workout_updated",
                     "sync_snapshot",
                 ],
-            }
+            },
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+            },
         )
