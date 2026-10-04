@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 import time
 from typing import Any
 
@@ -15,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
+    CONF_SHARED_SECRET,
     DATA_RUNTIMES,
     DOMAIN,
     HEADER_NONCE,
@@ -105,6 +107,9 @@ async def async_handle_webhook(
     )
     async_dispatcher_send(hass, signal_update(runtime.entry_id))
 
+    if event_type == "unpair":
+        _rotate_shared_secret(hass, runtime)
+
     return web.json_response(
         {
             "ok": True,
@@ -160,6 +165,28 @@ def _purge_old_nonces(runtime: ATHLTHRuntimeData, now: int) -> None:
     ]
     for nonce in stale:
         runtime.nonces.pop(nonce, None)
+
+
+def _rotate_shared_secret(
+    hass: HomeAssistant,
+    runtime: ATHLTHRuntimeData,
+) -> None:
+    """Invalidate the current ATHLTH pairing without exposing a new secret."""
+    shared_secret = secrets.token_urlsafe(48)
+    runtime.shared_secret = shared_secret
+    runtime.nonces.clear()
+    runtime.state["workout_active"] = False
+    runtime.state.pop("active_workout", None)
+
+    entry = hass.config_entries.async_get_entry(runtime.entry_id)
+    if entry is not None:
+        hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **entry.data,
+                CONF_SHARED_SECRET: shared_secret,
+            },
+        )
 
 
 def _apply_event(
