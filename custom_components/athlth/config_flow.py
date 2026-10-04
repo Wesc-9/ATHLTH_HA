@@ -1,18 +1,39 @@
-"""Config flow for ATHLTH."""
+"""Config and options flows for ATHLTH."""
 
 from typing import Any
 
 import probatio
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
+from homeassistant.core import callback
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 
-from .const import DOMAIN
+from .const import (
+    DATA_RUNTIMES,
+    DOMAIN,
+    PAIRING_CODE_ATTEMPTS,
+    PAIRING_CODE_TTL_SECONDS,
+)
+from .runtime import ATHLTHRuntimeData
 
 
 class ATHLTHConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle ATHLTH setup."""
 
-    VERSION = 1
+    VERSION = 2
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> OptionsFlow:
+        """Create the ATHLTH pairing-code options flow."""
+        return ATHLTHOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -29,4 +50,53 @@ class ATHLTHConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=probatio.Schema({}),
+        )
+
+
+class ATHLTHOptionsFlow(OptionsFlow):
+    """Show a short-lived local pairing code for the ATHLTH app."""
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Issue a one-time code without persisting it in Home Assistant."""
+        if user_input is not None:
+            return self.async_create_entry(data={})
+
+        runtimes: dict[str, ATHLTHRuntimeData] = (
+            self.hass.data.get(DOMAIN, {}).get(DATA_RUNTIMES, {})
+        )
+        runtime = runtimes.get(self.config_entry.entry_id)
+        if runtime is None:
+            return self.async_abort(reason="not_loaded")
+
+        code, _ = runtime.issue_pairing_code(
+            ttl_seconds=PAIRING_CODE_TTL_SECONDS,
+            attempts=PAIRING_CODE_ATTEMPTS,
+        )
+
+        try:
+            local_url = get_url(
+                self.hass,
+                allow_internal=True,
+                allow_external=False,
+                allow_cloud=False,
+                allow_ip=True,
+                prefer_external=False,
+            )
+        except NoURLAvailableError:
+            local_url = (
+                self.hass.config.internal_url
+                or "http://homeassistant.local:8123"
+            )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=probatio.Schema({}),
+            description_placeholders={
+                "pairing_code": f"{code[:3]} {code[3:]}",
+                "address": local_url,
+                "expires_minutes": str(PAIRING_CODE_TTL_SECONDS // 60),
+            },
         )
