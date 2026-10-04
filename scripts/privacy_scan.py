@@ -17,6 +17,10 @@ SKIP_DIRS = {".git", "__pycache__", ".pytest_cache"}
 SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".db"}
 SKIP_FILES = {Path("scripts/privacy_scan.py")}
 
+# Generic Home Assistant defaults such as "homeassistant.local" are public
+# documentation values and are intentionally not treated as personal data.
+# Private IPs, credentials, project endpoints and developer paths remain
+# blocked in both the current checkout and the full Git history.
 RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "private ATHLTH application repository",
@@ -43,10 +47,6 @@ RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"192\.168\.(?:\d{1,3}\.)\d{1,3}|"
             r"172\.(?:1[6-9]|2\d|3[01])\.(?:\d{1,3}\.)\d{1,3})\b"
         ),
-    ),
-    (
-        "personal local Home Assistant hostname",
-        re.compile(r"\bhomeassistant\.local(?::\d+)?\b", re.IGNORECASE),
     ),
     (
         "local developer filesystem path",
