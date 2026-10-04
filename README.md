@@ -56,7 +56,16 @@ ATHLTH currently exposes:
 - `sensor.athlth_training_load`
 - `sensor.athlth_weekly_progress`
 - `sensor.athlth_next_workout`
+- `sensor.athlth_next_workout_time`
+- `sensor.athlth_sleep_duration`
+- `sensor.athlth_hrv`
+- `sensor.athlth_resting_heart_rate`
+- `sensor.athlth_respiratory_rate`
+- `sensor.athlth_weekly_training_minutes`
+- `sensor.athlth_weekly_distance`
 - `binary_sensor.athlth_workout_active`
+
+The active-workout binary sensor also exposes workout name, type, start time and recording device when available. The last-workout sensor exposes type, duration, distance, end time and recording device. Sleep, HRV, resting heart rate, respiratory rate, recovery and training load are individually controlled from ATHLTH and health-derived sharing is off by default.
 
 Entity values are restored after a Home Assistant restart and refreshed when ATHLTH reconnects.
 
