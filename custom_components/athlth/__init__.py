@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.network import NoURLAvailableError
 from homeassistant.helpers.storage import Store
 
 from .api import ATHLTHPairView
@@ -289,11 +290,22 @@ async def _async_resolve_webhook_url(
             return cloudhook_url, True
 
     data.pop(CONF_CLOUDHOOK_URL, None)
-    return (
-        webhook.async_generate_url(
-            hass,
-            webhook_id,
-            prefer_external=True,
-        ),
-        False,
-    )
+
+    try:
+        return (
+            webhook.async_generate_url(
+                hass,
+                webhook_id,
+                prefer_external=True,
+            ),
+            False,
+        )
+    except NoURLAvailableError:
+        # Home Assistant can be configured without an internal/external URL
+        # that is usable during config-entry setup. Do not fail the whole
+        # integration in that case. The authenticated pairing request later
+        # provides the actual origin ATHLTH used to reach this instance.
+        return (
+            webhook.async_generate_path(webhook_id),
+            False,
+        )
