@@ -1,0 +1,40 @@
+name: Publish ATHLTH Home Assistant v0.3.1
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-v0.3.1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish v0.3.1 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if gh release view v0.3.1 >/dev/null 2>&1; then
+            echo "v0.3.1 already exists; nothing to do."
+            exit 0
+          fi
+
+          gh release create v0.3.1 \
+            --target "${GITHUB_SHA}" \
+            --title "0.3.1" \
+            --notes "ATHLTH Home Assistant 0.3.1
+
+          Fixes:
+          - Fixes a webhook module name collision that prevented fresh ATHLTH config entries from loading.
+          - Local pairing now recovers the config-entry runtime before showing a pairing code.
+          - Falls back cleanly to local/external webhook access if Home Assistant Cloud disconnects while creating a cloudhook.
+          - Adds an integration setup regression test across Home Assistant 2026.9.4 and 2026.10 beta."
+
