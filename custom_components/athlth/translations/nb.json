@@ -1,0 +1,14 @@
+{
+  "title": "ATHLTH",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Koble til ATHLTH",
+        "description": "Legg til ATHLTH-broen i Home Assistant. Paring med ATHLTH-appen fullføres sikkert fra appen, uten at du må opprette eller lime inn en API-nøkkel."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "ATHLTH er allerede konfigurert."
+    }
+  }
+}
