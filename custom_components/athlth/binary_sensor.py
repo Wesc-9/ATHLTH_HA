@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+import time
 from typing import override
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
@@ -47,6 +53,11 @@ async def async_setup_entry(
                     client,
                 ),
                 ATHLTHConnectionBinarySensor(
+                    entry,
+                    runtime,
+                    client,
+                ),
+                ATHLTHConnectionHealthyBinarySensor(
                     entry,
                     runtime,
                     client,
@@ -156,6 +167,7 @@ class ATHLTHConnectionBinarySensor(BinarySensorEntity):
     _attr_name = "Connected"
     _attr_icon = "mdi:link-variant"
     _attr_should_poll = False
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
 
     def __init__(
         self,
@@ -208,5 +220,133 @@ class ATHLTHConnectionBinarySensor(BinarySensorEntity):
                 self.hass,
                 signal_update(self._entry_id),
                 self.async_write_ha_state,
+            )
+        )
+
+
+
+class ATHLTHConnectionHealthyBinarySensor(BinarySensorEntity):
+    """Summarize pairing, synchronization freshness and queue health."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Connection healthy"
+    _attr_icon = "mdi:heart-pulse"
+    _attr_should_poll = False
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+
+    _stale_after_seconds = 12 * 60 * 60
+    _queue_warning = 8
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        runtime: ATHLTHRuntimeData,
+        client: ATHLTHClientRuntime,
+    ) -> None:
+        self._entry_id = entry.entry_id
+        self._runtime = runtime
+        self._client = client
+
+        if client.is_primary:
+            unique_prefix = entry.entry_id
+            device_identifier = entry.entry_id
+            device_name = "ATHLTH"
+        else:
+            unique_prefix = f"{entry.entry_id}_{client.client_id}"
+            device_identifier = f"{entry.entry_id}:{client.client_id}"
+            suffix = client.client_id[-4:]
+            device_name = f"{client.name} · {suffix}"
+
+        self._attr_unique_id = f"{unique_prefix}_connection_healthy"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device_identifier)},
+            name=device_name,
+            manufacturer="ATHLTH",
+            model="Home Assistant Link",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """Return whether the pairing looks healthy without being over-sensitive."""
+        if not self._client.shared_secret:
+            return False
+
+        if (
+            self._client.last_seen is not None
+            and time.time() - self._client.last_seen
+            > self._stale_after_seconds
+        ):
+            return False
+
+        if len(self._client.pending_commands) > self._queue_warning:
+            return False
+
+        pending_deliveries = self._client.state.get(
+            "pending_delivery_count",
+            0,
+        )
+        if (
+            isinstance(pending_deliveries, (int, float))
+            and pending_deliveries > self._queue_warning
+        ):
+            return False
+
+        return True
+
+    @property
+    def extra_state_attributes(self):
+        """Expose a non-sensitive reason for degraded connectivity."""
+        now = time.time()
+        age = (
+            None
+            if self._client.last_seen is None
+            else max(now - self._client.last_seen, 0)
+        )
+        pending_deliveries = self._client.state.get(
+            "pending_delivery_count",
+            0,
+        )
+
+        if not self._client.shared_secret:
+            status = "not_paired"
+        elif age is not None and age > self._stale_after_seconds:
+            status = "stale"
+        elif len(self._client.pending_commands) > self._queue_warning:
+            status = "command_queue"
+        elif (
+            isinstance(pending_deliveries, (int, float))
+            and pending_deliveries > self._queue_warning
+        ):
+            status = "delivery_queue"
+        elif self._client.last_seen is None:
+            status = "waiting_for_first_sync"
+        else:
+            status = "healthy"
+
+        return {
+            "status": status,
+            "last_seen": self._client.last_seen,
+            "seconds_since_last_seen": age,
+            "pending_commands": len(self._client.pending_commands),
+            "pending_deliveries": pending_deliveries,
+        }
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Refresh on ATHLTH traffic and periodically re-evaluate staleness."""
+        await super().async_added_to_hass()
+
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_update(self._entry_id),
+                self.async_write_ha_state,
+            )
+        )
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass,
+                lambda _now: self.async_write_ha_state(),
+                timedelta(minutes=15),
             )
         )
