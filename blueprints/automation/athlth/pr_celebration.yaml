@@ -1,0 +1,23 @@
+blueprint:
+  name: ATHLTH · PR celebration
+  description: Run a celebration when ATHLTH emits a personal_record event.
+  domain: automation
+  input:
+    event_entity:
+      name: ATHLTH events
+      selector:
+        entity:
+          domain: event
+    actions:
+      name: Celebration actions
+      selector:
+        action: {}
+trigger:
+  - platform: state
+    entity_id: !input event_entity
+condition:
+  - condition: template
+    value_template: "{{ trigger.to_state.attributes.event_type == 'personal_record' }}"
+action: !input actions
+mode: queued
+max: 5
