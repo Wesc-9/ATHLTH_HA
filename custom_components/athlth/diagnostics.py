@@ -10,6 +10,8 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_CLOUDHOOK_URL,
+    CONF_PRIMARY_CLIENT_ID,
+    CONF_PRIMARY_CLIENT_NAME,
     CONF_SHARED_SECRET,
     CONF_WEBHOOK_ID,
     DATA_RUNTIMES,
@@ -24,6 +26,8 @@ _TO_REDACT = {
     CONF_CLOUDHOOK_URL,
     CONF_SHARED_SECRET,
     CONF_WEBHOOK_ID,
+    CONF_PRIMARY_CLIENT_ID,
+    CONF_PRIMARY_CLIENT_NAME,
 }
 
 
@@ -50,8 +54,17 @@ async def async_get_config_entry_diagnostics(
                 if runtime is not None and runtime.uses_cloudhook
                 else "webhook"
             ),
+            "client_count": (
+                len(runtime.clients)
+                if runtime is not None
+                else 0
+            ),
             "has_seen_client": (
-                runtime is not None and runtime.last_seen is not None
+                runtime is not None
+                and any(
+                    client.last_seen is not None
+                    for client in runtime.clients.values()
+                )
             ),
         },
     }
