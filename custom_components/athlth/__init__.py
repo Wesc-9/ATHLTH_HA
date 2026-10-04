@@ -120,6 +120,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if isinstance(raw_primary_pending_commands, list)
         else []
     )
+    raw_primary_calendar_events = stored_clients_data.get(
+        "primary_calendar_events",
+        [],
+    )
+    primary_state = {
+        "calendar_events": raw_primary_calendar_events
+    } if isinstance(raw_primary_calendar_events, list) else {}
 
     clients: dict[str, ATHLTHClientRuntime] = {
         primary_client_id: ATHLTHClientRuntime(
@@ -128,6 +135,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             shared_secret=shared_secret,
             delivery_ids=primary_delivery_ids,
             pending_commands=primary_pending_commands,
+            state=primary_state,
             is_primary=True,
         )
     }
@@ -176,6 +184,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if isinstance(raw_pending_commands, list)
                 else []
             )
+            raw_calendar_events = raw_client.get(
+                "calendar_events",
+                [],
+            )
+            additional_state = {
+                "calendar_events": raw_calendar_events
+            } if isinstance(raw_calendar_events, list) else {}
 
             clients[client_id] = ATHLTHClientRuntime(
                 client_id=client_id,
@@ -183,6 +198,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 shared_secret=additional_secret,
                 delivery_ids=additional_delivery_ids,
                 pending_commands=pending_commands,
+                state=additional_state,
             )
 
     if data != dict(entry.data):
