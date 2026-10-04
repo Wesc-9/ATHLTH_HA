@@ -21,6 +21,7 @@ from .const import (
     DATA_RUNTIMES,
     DELIVERY_ID_TTL_SECONDS,
     DOMAIN,
+    HEADER_CLIENT_ID,
     HEADER_NONCE,
     HEADER_SIGNATURE,
     HEADER_TIMESTAMP,
@@ -34,7 +35,7 @@ from .const import (
     SUPPORTED_EVENTS,
     signal_update,
 )
-from .runtime import ATHLTHRuntimeData
+from .runtime import ATHLTHClientRuntime, ATHLTHRuntimeData
 
 _EVENT_PATTERN = re.compile(r"^[a-z0-9_]{1,64}$")
 _MAX_TEXT_LENGTH = 256
@@ -53,6 +54,11 @@ async def async_handle_webhook(
     content_length = request.content_length
     if content_length is not None and content_length > MAX_PAYLOAD_BYTES:
         return _error("payload_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+
+    client_id = request.headers.get(HEADER_CLIENT_ID)
+    client = runtime.resolve_client(client_id)
+    if client is None:
+        return _error("unknown_client", HTTPStatus.UNAUTHORIZED)
 
     timestamp_header = request.headers.get(HEADER_TIMESTAMP)
     nonce = request.headers.get(HEADER_NONCE)
@@ -73,8 +79,8 @@ async def async_handle_webhook(
     if abs(now - timestamp) > MAX_CLOCK_SKEW_SECONDS:
         return _error("stale_request", HTTPStatus.UNAUTHORIZED)
 
-    _purge_old_nonces(runtime, now)
-    if nonce in runtime.nonces:
+    _purge_old_nonces(client, now)
+    if nonce in client.nonces:
         return _error("replayed_request", HTTPStatus.CONFLICT)
 
     raw_body = await request.read()
@@ -82,7 +88,7 @@ async def async_handle_webhook(
         return _error("payload_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
 
     if not _signature_is_valid(
-        runtime.shared_secret,
+        client.shared_secret,
         timestamp_header,
         nonce,
         raw_body,
@@ -103,13 +109,13 @@ async def async_handle_webhook(
     payload = message.get("payload", {})
     delivery_id = payload.get("delivery_id")
 
-    runtime.nonces[nonce] = float(now)
-    runtime.last_seen = float(now)
-    _purge_old_delivery_ids(runtime, now)
+    client.nonces[nonce] = float(now)
+    client.last_seen = float(now)
+    _purge_old_delivery_ids(client, now)
 
     if (
         isinstance(delivery_id, str)
-        and delivery_id in runtime.delivery_ids
+        and delivery_id in client.delivery_ids
     ):
         return web.json_response(
             {
@@ -121,7 +127,7 @@ async def async_handle_webhook(
             headers={"Cache-Control": "no-store"},
         )
 
-    _apply_event(runtime, event_type, payload, now)
+    _apply_event(client, event_type, payload, now)
 
     public_payload = {
         key: value
@@ -136,16 +142,16 @@ async def async_handle_webhook(
         {
             "event": event_type,
             "payload": public_payload,
-            "client_id": runtime.entry_id,
+            "client_id": client.client_id,
         },
     )
     async_dispatcher_send(hass, signal_update(runtime.entry_id))
 
     if isinstance(delivery_id, str):
-        await _remember_delivery(runtime, delivery_id, now)
+        await _remember_delivery(runtime, client, delivery_id, now)
 
     if event_type == "unpair":
-        await _rotate_shared_secret(hass, runtime)
+        await _rotate_shared_secret(hass, runtime, client)
 
     return web.json_response(
         {
@@ -293,125 +299,133 @@ def _number_in_range(value: object, minimum: float, maximum: float) -> bool:
     return minimum <= float(value) <= maximum
 
 
-def _purge_old_nonces(runtime: ATHLTHRuntimeData, now: int) -> None:
+def _purge_old_nonces(client: ATHLTHClientRuntime, now: int) -> None:
     cutoff = now - NONCE_TTL_SECONDS
     stale = [
         nonce
-        for nonce, seen_at in runtime.nonces.items()
+        for nonce, seen_at in client.nonces.items()
         if seen_at < cutoff
     ]
     for nonce in stale:
-        runtime.nonces.pop(nonce, None)
+        client.nonces.pop(nonce, None)
 
 
 def _purge_old_delivery_ids(
-    runtime: ATHLTHRuntimeData,
+    client: ATHLTHClientRuntime,
     now: int,
 ) -> None:
     cutoff = now - DELIVERY_ID_TTL_SECONDS
     stale = [
         delivery_id
-        for delivery_id, seen_at in runtime.delivery_ids.items()
+        for delivery_id, seen_at in client.delivery_ids.items()
         if seen_at < cutoff
     ]
     for delivery_id in stale:
-        runtime.delivery_ids.pop(delivery_id, None)
+        client.delivery_ids.pop(delivery_id, None)
 
 
 async def _remember_delivery(
     runtime: ATHLTHRuntimeData,
+    client: ATHLTHClientRuntime,
     delivery_id: str,
     now: int,
 ) -> None:
-    runtime.delivery_ids[delivery_id] = float(now)
-    _purge_old_delivery_ids(runtime, now)
+    client.delivery_ids[delivery_id] = float(now)
+    _purge_old_delivery_ids(client, now)
 
-    if runtime.delivery_store is not None:
-        await runtime.delivery_store.async_save(
-            {"delivery_ids": runtime.delivery_ids}
-        )
+    if client.is_primary:
+        if runtime.delivery_store is not None:
+            await runtime.delivery_store.async_save(
+                {"delivery_ids": client.delivery_ids}
+            )
+    else:
+        await runtime.async_save_additional_clients()
 
 
 async def _rotate_shared_secret(
     hass: HomeAssistant,
     runtime: ATHLTHRuntimeData,
+    client: ATHLTHClientRuntime,
 ) -> None:
-    """Invalidate the current ATHLTH pairing without exposing a new secret."""
+    """Invalidate only the client that requested unpairing."""
     shared_secret = secrets.token_urlsafe(48)
-    runtime.shared_secret = shared_secret
-    runtime.nonces.clear()
-    runtime.delivery_ids.clear()
-    runtime.state["workout_active"] = False
-    runtime.state.pop("active_workout", None)
-
-    if runtime.delivery_store is not None:
-        await runtime.delivery_store.async_save(
-            {"delivery_ids": {}}
-        )
+    client.shared_secret = shared_secret
+    client.nonces.clear()
+    client.delivery_ids.clear()
+    client.state.clear()
+    client.state["workout_active"] = False
 
     entry = hass.config_entries.async_get_entry(runtime.entry_id)
-    if entry is not None:
-        hass.config_entries.async_update_entry(
-            entry,
-            data={
-                **entry.data,
-                CONF_SHARED_SECRET: shared_secret,
-            },
-        )
+
+    if client.is_primary:
+        if runtime.delivery_store is not None:
+            await runtime.delivery_store.async_save(
+                {"delivery_ids": {}}
+            )
+        if entry is not None:
+            hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    **entry.data,
+                    CONF_SHARED_SECRET: shared_secret,
+                },
+            )
+    else:
+        await runtime.async_save_additional_clients()
 
 
 def _apply_event(
-    runtime: ATHLTHRuntimeData,
+    client: ATHLTHClientRuntime,
     event_type: str,
     payload: dict[str, Any],
     now: int,
 ) -> None:
-    runtime.state["last_event"] = event_type
-    runtime.state["last_event_at"] = now
+    client.state["last_event"] = event_type
+    client.state["last_event_at"] = now
 
     entity_state = payload.get("entity_state")
     if isinstance(entity_state, dict):
         for key, value in entity_state.items():
             if key in RESTORABLE_STATE_KEYS:
-                runtime.state[key] = value
+                client.state[key] = value
 
     if event_type == "workout_started":
-        runtime.state["workout_active"] = True
-        runtime.state["active_workout"] = (
+        client.state["workout_active"] = True
+        client.state["active_workout"] = (
             payload.get("name")
             or payload.get("workout_name")
             or payload.get("type")
         )
 
     elif event_type == "workout_updated":
-        runtime.state["workout_active"] = True
+        client.state["workout_active"] = True
 
     elif event_type == "workout_cancelled":
-        runtime.state["workout_active"] = False
-        runtime.state.pop("active_workout", None)
+        client.state["workout_active"] = False
+        client.state.pop("active_workout", None)
 
     elif event_type == "workout_finished":
-        runtime.state["workout_active"] = False
+        client.state["workout_active"] = False
         if payload.get("completed", True):
-            runtime.state["last_workout"] = (
+            client.state["last_workout"] = (
                 payload.get("name")
                 or payload.get("workout_name")
                 or payload.get("type")
             )
-            runtime.state["last_workout_at"] = payload.get("ended_at", now)
-        runtime.state.pop("active_workout", None)
+            client.state["last_workout_at"] = payload.get("ended_at", now)
+        client.state.pop("active_workout", None)
 
     elif event_type == "recovery_updated":
-        runtime.state["recovery_score"] = payload["score"]
+        client.state["recovery_score"] = payload["score"]
 
     elif event_type == "training_load_updated":
-        runtime.state["training_load"] = payload["load"]
+        client.state["training_load"] = payload["load"]
 
     elif event_type == "weekly_progress_updated":
-        runtime.state["weekly_progress"] = payload["percent"]
+        client.state["weekly_progress"] = payload["percent"]
 
     elif event_type == "next_workout_updated":
-        runtime.state["next_workout"] = (
+        client.state["next_workout"] = (
             payload.get("name")
             or payload.get("workout_name")
         )
@@ -421,4 +435,4 @@ def _apply_event(
         if isinstance(snapshot, dict):
             for key, value in snapshot.items():
                 if key in RESTORABLE_STATE_KEYS:
-                    runtime.state[key] = value
+                    client.state[key] = value
