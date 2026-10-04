@@ -45,7 +45,12 @@ async def async_setup_entry(
                     entry,
                     runtime,
                     client,
-                )
+                ),
+                ATHLTHConnectionBinarySensor(
+                    entry,
+                    runtime,
+                    client,
+                ),
             ]
         )
 
@@ -133,6 +138,70 @@ class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
                 )
                 if isinstance(active_workout, str) and active_workout:
                     self._client.state["active_workout"] = active_workout
+
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_update(self._entry_id),
+                self.async_write_ha_state,
+            )
+        )
+
+
+
+class ATHLTHConnectionBinarySensor(BinarySensorEntity):
+    """Show whether an ATHLTH app installation is paired."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Connected"
+    _attr_icon = "mdi:link-variant"
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        runtime: ATHLTHRuntimeData,
+        client: ATHLTHClientRuntime,
+    ) -> None:
+        self._entry_id = entry.entry_id
+        self._runtime = runtime
+        self._client = client
+
+        if client.is_primary:
+            unique_prefix = entry.entry_id
+            device_identifier = entry.entry_id
+            device_name = "ATHLTH"
+        else:
+            unique_prefix = f"{entry.entry_id}_{client.client_id}"
+            device_identifier = f"{entry.entry_id}:{client.client_id}"
+            suffix = client.client_id[-4:]
+            device_name = f"{client.name} · {suffix}"
+
+        self._attr_unique_id = f"{unique_prefix}_connected"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device_identifier)},
+            name=device_name,
+            manufacturer="ATHLTH",
+            model="Home Assistant Link",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """A loaded client with pairing material is connected."""
+        return bool(self._client.shared_secret)
+
+    @property
+    def extra_state_attributes(self):
+        """Expose non-sensitive synchronization health."""
+        return {
+            "last_seen": self._client.last_seen,
+            "pending_commands": len(self._client.pending_commands),
+        }
+
+    @override
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to ATHLTH runtime updates."""
+        await super().async_added_to_hass()
 
         self.async_on_remove(
             async_dispatcher_connect(
