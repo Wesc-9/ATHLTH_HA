@@ -108,3 +108,49 @@ def test_snapshot_only_accepts_documented_entity_state():
         )
         == "invalid_snapshot"
     )
+
+
+def test_health_snapshot_values_are_bounded():
+    """Health snapshots accept realistic values and reject unsafe ranges."""
+    valid = {
+        "event": "sync_snapshot",
+        "payload": {
+            "state": {
+                "sleep_duration_minutes": 455,
+                "hrv_milliseconds": 62.5,
+                "resting_heart_rate": 48,
+                "respiratory_rate": 14.2,
+                "weekly_training_minutes": 310,
+                "weekly_distance_km": 42.2,
+            }
+        },
+    }
+    assert _validate_message(valid) is None
+
+    invalid = {
+        "event": "sync_snapshot",
+        "payload": {
+            "state": {
+                "resting_heart_rate": 900,
+            }
+        },
+    }
+    assert _validate_message(invalid) == "invalid_resting_heart_rate"
+
+
+def test_next_workout_timestamp_is_allowed_in_snapshot():
+    """The next-workout timestamp is part of the documented snapshot state."""
+    assert (
+        _validate_message(
+            {
+                "event": "sync_snapshot",
+                "payload": {
+                    "state": {
+                        "next_workout": "Intervals",
+                        "next_workout_time": "2026-10-05T18:00:00+02:00",
+                    }
+                },
+            }
+        )
+        is None
+    )
