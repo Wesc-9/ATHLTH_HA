@@ -68,6 +68,7 @@ RESTORABLE_STATE_KEYS = frozenset(
         "last_workout_duration_seconds",
         "last_workout_distance_meters",
         "last_workout_ended_at",
+        "last_workout_device",
     }
 )
 
