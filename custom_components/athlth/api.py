@@ -149,13 +149,20 @@ class ATHLTHPairView(HomeAssistantView):
                 client.client_id,
             )
 
+        webhook_path = f"/api/webhook/{runtime.webhook_id}"
+        webhook_url = runtime.webhook_url
+        if webhook_url.startswith("/"):
+            webhook_url = (
+                f"{request.scheme}://{request.host}{webhook_path}"
+            )
+
         return self.json(
             {
                 "protocol_version": SUPPORTED_PROTOCOL_VERSION,
                 "client_id": client.client_id,
                 "webhook_id": runtime.webhook_id,
-                "webhook_url": runtime.webhook_url,
-                "webhook_path": f"/api/webhook/{runtime.webhook_id}",
+                "webhook_url": webhook_url,
+                "webhook_path": webhook_path,
                 "shared_secret": client.shared_secret,
                 "signature_algorithm": SUPPORTED_SIGNATURE_ALGORITHM,
                 "transport": (
