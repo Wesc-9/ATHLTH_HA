@@ -106,8 +106,15 @@ class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
     def extra_state_attributes(self):
         """Return the active workout name when available."""
         return {
-            "active_workout": self._client.state.get("active_workout"),
-            "last_seen": self._client.last_seen,
+            key: value
+            for key, value in {
+                "active_workout": self._client.state.get("active_workout"),
+                "workout_type": self._client.state.get("active_workout_type"),
+                "started_at": self._client.state.get("active_workout_started_at"),
+                "device": self._client.state.get("active_workout_device"),
+                "last_seen": self._client.last_seen,
+            }.items()
+            if value is not None
         }
 
     @override
