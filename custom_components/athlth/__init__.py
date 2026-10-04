@@ -6,7 +6,7 @@ import contextlib
 import secrets
 from typing import Any
 
-from homeassistant.components import cloud, webhook
+from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -115,6 +115,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         entry.data.get(CONF_CLOUDHOOK_URL)
         and "cloud" in hass.config.components
     ):
+        from homeassistant.components import cloud
+
         with contextlib.suppress(
             cloud.CloudNotAvailable,
             cloud.CloudNotConnected,
@@ -131,16 +133,18 @@ async def _async_resolve_webhook_url(
     data: dict[str, Any],
 ) -> tuple[str, bool]:
     """Prefer a cloudhook, then an external URL, then local access."""
-    if (
-        "cloud" in hass.config.components
-        and cloud.async_active_subscription(hass)
-        and cloud.async_is_connected(hass)
-    ):
-        cloudhook_url = await cloud.async_get_or_create_cloudhook(
-            hass, webhook_id
-        )
-        data[CONF_CLOUDHOOK_URL] = cloudhook_url
-        return cloudhook_url, True
+    if "cloud" in hass.config.components:
+        from homeassistant.components import cloud
+
+        if (
+            cloud.async_active_subscription(hass)
+            and cloud.async_is_connected(hass)
+        ):
+            cloudhook_url = await cloud.async_get_or_create_cloudhook(
+                hass, webhook_id
+            )
+            data[CONF_CLOUDHOOK_URL] = cloudhook_url
+            return cloudhook_url, True
 
     data.pop(CONF_CLOUDHOOK_URL, None)
     return (
