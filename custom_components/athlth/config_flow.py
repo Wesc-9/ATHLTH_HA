@@ -2,22 +2,21 @@
 
 from typing import Any
 
-import voluptuous as vol
+import probatio
 
-from homeassistant import config_entries
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
 from .const import DOMAIN
 
 
-class ATHLTHConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ATHLTHConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle ATHLTH setup."""
 
     VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Create the single ATHLTH config entry."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
@@ -29,5 +28,5 @@ class ATHLTHConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=vol.Schema({}),
+            data_schema=probatio.Schema({}),
         )
