@@ -6,7 +6,7 @@ import contextlib
 import secrets
 from typing import Any
 
-from homeassistant.components import webhook
+from homeassistant.components import webhook as ha_webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -62,7 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     shared_secret = data.get(CONF_SHARED_SECRET)
 
     if not webhook_id:
-        webhook_id = webhook.async_generate_id()
+        webhook_id = ha_webhook.async_generate_id()
         data[CONF_WEBHOOK_ID] = webhook_id
 
     if not shared_secret:
@@ -222,7 +222,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     runtimes = domain_data.setdefault(DATA_RUNTIMES, {})
     runtimes[entry.entry_id] = runtime
 
-    webhook.async_register(
+    ha_webhook.async_register(
         hass,
         DOMAIN,
         "ATHLTH",
@@ -233,7 +233,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     entry.async_on_unload(
-        lambda: webhook.async_unregister(hass, webhook_id)
+        lambda: ha_webhook.async_unregister(hass, webhook_id)
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -306,7 +306,7 @@ async def _async_resolve_webhook_url(
 
     try:
         return (
-            webhook.async_generate_url(
+            ha_webhook.async_generate_url(
                 hass,
                 webhook_id,
                 prefer_external=True,
@@ -319,6 +319,6 @@ async def _async_resolve_webhook_url(
         # integration in that case. The authenticated pairing request later
         # provides the actual origin ATHLTH used to reach this instance.
         return (
-            webhook.async_generate_path(webhook_id),
+            ha_webhook.async_generate_path(webhook_id),
             False,
         )
