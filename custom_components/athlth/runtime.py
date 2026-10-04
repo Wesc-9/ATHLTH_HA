@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+import hashlib
+import secrets
+import time
 import uuid
 
 from homeassistant.helpers.storage import Store
@@ -36,6 +39,62 @@ class ATHLTHRuntimeData:
     primary_client_id: str = ""
     client_store: Store | None = None
     delivery_store: Store | None = None
+    pairing_code_digest: str | None = None
+    pairing_code_salt: str | None = None
+    pairing_code_expires_at: float | None = None
+    pairing_code_attempts_remaining: int = 0
+
+    def issue_pairing_code(
+        self,
+        *,
+        ttl_seconds: int = 300,
+        attempts: int = 5,
+    ) -> tuple[str, float]:
+        """Create a one-time local pairing code without storing it in plaintext."""
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        salt = secrets.token_hex(16)
+        digest = hashlib.sha256(
+            f"{salt}:{code}".encode()
+        ).hexdigest()
+
+        self.pairing_code_digest = digest
+        self.pairing_code_salt = salt
+        self.pairing_code_expires_at = time.time() + ttl_seconds
+        self.pairing_code_attempts_remaining = attempts
+        return code, self.pairing_code_expires_at
+
+    def verify_pairing_code(self, code: str) -> bool:
+        """Consume one pairing-code attempt and invalidate on success."""
+        if (
+            self.pairing_code_digest is None
+            or self.pairing_code_salt is None
+            or self.pairing_code_expires_at is None
+            or time.time() > self.pairing_code_expires_at
+            or self.pairing_code_attempts_remaining <= 0
+        ):
+            self.clear_pairing_code()
+            return False
+
+        self.pairing_code_attempts_remaining -= 1
+        digest = hashlib.sha256(
+            f"{self.pairing_code_salt}:{code}".encode()
+        ).hexdigest()
+        valid = secrets.compare_digest(
+            digest,
+            self.pairing_code_digest,
+        )
+
+        if valid or self.pairing_code_attempts_remaining <= 0:
+            self.clear_pairing_code()
+
+        return valid
+
+    def clear_pairing_code(self) -> None:
+        """Invalidate any outstanding local pairing code."""
+        self.pairing_code_digest = None
+        self.pairing_code_salt = None
+        self.pairing_code_expires_at = None
+        self.pairing_code_attempts_remaining = 0
 
     @property
     def primary_client(self) -> ATHLTHClientRuntime:
