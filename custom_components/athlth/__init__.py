@@ -14,7 +14,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.network import NoURLAvailableError
 from homeassistant.helpers.storage import Store
 
-from .api import ATHLTHPairView
+from .api import ATHLTHLocalPairView, ATHLTHPairView
 from .const import (
     CONF_CLOUDHOOK_URL,
     CONF_PRIMARY_CLIENT_ID,
@@ -47,6 +47,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
     if not domain_data.get(DATA_API_REGISTERED):
         hass.http.register_view(ATHLTHPairView())
+        hass.http.register_view(ATHLTHLocalPairView())
         domain_data[DATA_API_REGISTERED] = True
 
     return True
