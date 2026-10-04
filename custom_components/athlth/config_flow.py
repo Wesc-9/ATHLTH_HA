@@ -6,6 +6,7 @@ import probatio
 
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
@@ -68,6 +69,28 @@ class ATHLTHOptionsFlow(OptionsFlow):
             self.hass.data.get(DOMAIN, {}).get(DATA_RUNTIMES, {})
         )
         runtime = runtimes.get(self.config_entry.entry_id)
+
+        if runtime is None:
+            # A config entry can briefly exist before its runtime is ready,
+            # and older failed setups can leave a loaded-looking entry with
+            # no runtime. Recover once here so the user does not get stuck
+            # behind a dead-end "not loaded" dialog.
+            if self.config_entry.state is ConfigEntryState.LOADED:
+                await self.hass.config_entries.async_reload(
+                    self.config_entry.entry_id
+                )
+            elif self.config_entry.state is ConfigEntryState.SETUP_IN_PROGRESS:
+                await self.hass.async_block_till_done()
+            else:
+                await self.hass.config_entries.async_setup(
+                    self.config_entry.entry_id
+                )
+
+            runtimes = (
+                self.hass.data.get(DOMAIN, {}).get(DATA_RUNTIMES, {})
+            )
+            runtime = runtimes.get(self.config_entry.entry_id)
+
         if runtime is None:
             return self.async_abort(reason="not_loaded")
 
