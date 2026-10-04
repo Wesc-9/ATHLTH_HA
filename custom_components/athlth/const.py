@@ -5,6 +5,7 @@ NAME = "ATHLTH"
 
 CONF_WEBHOOK_ID = "webhook_id"
 CONF_SHARED_SECRET = "shared_secret"
+CONF_CLOUDHOOK_URL = "cloudhook_url"
 
 DATA_API_REGISTERED = "api_registered"
 DATA_RUNTIMES = "runtimes"
