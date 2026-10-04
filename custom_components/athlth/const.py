@@ -70,6 +70,14 @@ RESTORABLE_STATE_KEYS = frozenset(
         "last_workout_distance_meters",
         "last_workout_ended_at",
         "last_workout_device",
+        "recovery_state",
+        "active_goal",
+        "goal_progress",
+        "goal_days_remaining",
+        "training_streak",
+        "weekly_workout_count",
+        "calendar_events",
+        "pending_delivery_count",
     }
 )
 
