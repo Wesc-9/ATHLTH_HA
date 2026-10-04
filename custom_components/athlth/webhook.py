@@ -170,6 +170,13 @@ async def async_handle_webhook(
     if isinstance(delivery_id, str):
         await _remember_delivery(runtime, client, delivery_id, now)
 
+    if (
+        event_type == "sync_snapshot"
+        and isinstance(payload.get("state"), dict)
+        and "calendar_events" in payload["state"]
+    ):
+        await runtime.async_save_clients()
+
     if event_type == "unpair":
         await _rotate_shared_secret(hass, runtime, client)
 
