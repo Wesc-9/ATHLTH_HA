@@ -157,3 +157,14 @@ Validation runs with HACS, Home Assistant hassfest, and the automated test suite
 Use GitHub Issues for reproducible integration problems. **Never paste webhook URLs, webhook IDs, pairing secrets, access tokens, Home Assistant external URLs, health exports or diagnostics containing personal information into a public issue.**
 
 See [SECURITY.md](SECURITY.md) for security-reporting guidance.
+
+
+## Live training and automations (0.3.0)
+
+ATHLTH 0.3 adds an opt-in live-training layer intended for home-gym automations and dashboards. When enabled in the ATHLTH app, Home Assistant can receive workout phase, elapsed time, distance, pace/speed, heart-rate zone, treadmill environment/incline, and strength set context such as exercise, set, reps, weight, rowing resistance and rowing distance. GPS coordinates are deliberately not part of this protocol.
+
+New user events include `workout_phase_updated`, `strength_set_updated`, `strength_set_completed`, `personal_record`, `achievement_unlocked`, `goal_completed` and `challenge_completed`. These are exposed through `event.athlth_events` as well as the local Home Assistant event bus.
+
+Home Assistant also registers safe ATHLTH actions: `athlth.sync_now`, `athlth.show_next_workout`, `athlth.send_notification`, `athlth.open_planned_workout`, `athlth.schedule_extra_workout` and `athlth.move_planned_workout`. Commands are queued per paired client and returned only on a later HMAC-authenticated ATHLTH contact. Scheduling from Home Assistant creates a standalone extra workout and intentionally does not alter the active ATHLTH training plan.
+
+A `binary_sensor.athlth_connection_healthy` entity summarizes stale synchronization and backed-up command/delivery queues. Additional ready-to-import blueprints cover home-gym mode, treadmill mode, workout completion, recovery evenings and PR celebrations.
