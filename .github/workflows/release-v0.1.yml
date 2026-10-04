@@ -1,0 +1,42 @@
+name: Publish ATHLTH Home Assistant v0.1
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-v0.1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish v0.1.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if gh release view v0.1.0 >/dev/null 2>&1; then
+            echo "v0.1.0 already exists; nothing to do."
+            exit 0
+          fi
+
+          gh release create v0.1.0 \
+            --target "${GITHUB_SHA}" \
+            --title "0.1" \
+            --notes "Initial ATHLTH Home Assistant integration release.
+
+          Highlights:
+          - Secure OAuth + PKCE pairing
+          - Signed HMAC webhook transport
+          - Home Assistant 2026.9.4+ support
+          - Per-client multi-user pairing
+          - Apple Watch workout-state support when iPhone is unavailable
+          - Recovery, training load, weekly progress, next workout and workout-state entities
+          - Privacy-safe diagnostics and replay protection"
