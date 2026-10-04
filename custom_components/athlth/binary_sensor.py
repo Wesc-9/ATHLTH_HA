@@ -13,8 +13,13 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DATA_RUNTIMES, DOMAIN, signal_update
-from .runtime import ATHLTHRuntimeData
+from .const import (
+    DATA_RUNTIMES,
+    DOMAIN,
+    signal_client_added,
+    signal_update,
+)
+from .runtime import ATHLTHClientRuntime, ATHLTHRuntimeData
 
 
 async def async_setup_entry(
@@ -22,15 +27,42 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up ATHLTH binary sensors."""
+    """Set up ATHLTH workout-state sensors for all paired clients."""
     runtime: ATHLTHRuntimeData = hass.data[DOMAIN][DATA_RUNTIMES][
         entry.entry_id
     ]
-    async_add_entities([ATHLTHWorkoutActiveBinarySensor(entry, runtime)])
+    added_clients: set[str] = set()
+
+    def add_client(client_id: str) -> None:
+        client = runtime.clients.get(client_id)
+        if client is None or client_id in added_clients:
+            return
+
+        added_clients.add(client_id)
+        async_add_entities(
+            [
+                ATHLTHWorkoutActiveBinarySensor(
+                    entry,
+                    runtime,
+                    client,
+                )
+            ]
+        )
+
+    for client in runtime.public_clients():
+        add_client(client.client_id)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            signal_client_added(entry.entry_id),
+            add_client,
+        )
+    )
 
 
 class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
-    """Show whether ATHLTH currently has an active workout."""
+    """Show whether one ATHLTH client currently has an active workout."""
 
     _attr_has_entity_name = True
     _attr_name = "Workout active"
@@ -41,13 +73,26 @@ class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
         self,
         entry: ConfigEntry,
         runtime: ATHLTHRuntimeData,
+        client: ATHLTHClientRuntime,
     ) -> None:
         self._entry_id = entry.entry_id
         self._runtime = runtime
-        self._attr_unique_id = f"{entry.entry_id}_workout_active"
+        self._client = client
+
+        if client.is_primary:
+            unique_prefix = entry.entry_id
+            device_identifier = entry.entry_id
+            device_name = "ATHLTH"
+        else:
+            unique_prefix = f"{entry.entry_id}_{client.client_id}"
+            device_identifier = f"{entry.entry_id}:{client.client_id}"
+            suffix = client.client_id[-4:]
+            device_name = f"{client.name} · {suffix}"
+
+        self._attr_unique_id = f"{unique_prefix}_workout_active"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name="ATHLTH",
+            identifiers={(DOMAIN, device_identifier)},
+            name=device_name,
             manufacturer="ATHLTH",
             model="Home Assistant Link",
         )
@@ -55,14 +100,14 @@ class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         """Return whether a workout is active."""
-        return bool(self._runtime.state.get("workout_active", False))
+        return bool(self._client.state.get("workout_active", False))
 
     @property
     def extra_state_attributes(self):
         """Return the active workout name when available."""
         return {
-            "active_workout": self._runtime.state.get("active_workout"),
-            "last_seen": self._runtime.last_seen,
+            "active_workout": self._client.state.get("active_workout"),
+            "last_seen": self._client.last_seen,
         }
 
     @override
@@ -70,15 +115,17 @@ class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
         """Restore the previous value and subscribe to webhook updates."""
         await super().async_added_to_hass()
 
-        if "workout_active" not in self._runtime.state:
+        if "workout_active" not in self._client.state:
             restored = await self.async_get_last_state()
             if restored is not None:
-                self._runtime.state["workout_active"] = restored.state == STATE_ON
+                self._client.state["workout_active"] = (
+                    restored.state == STATE_ON
+                )
                 active_workout = restored.attributes.get(
                     "active_workout"
                 )
                 if isinstance(active_workout, str) and active_workout:
-                    self._runtime.state["active_workout"] = active_workout
+                    self._client.state["active_workout"] = active_workout
 
         self.async_on_remove(
             async_dispatcher_connect(
