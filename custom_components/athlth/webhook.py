@@ -33,6 +33,8 @@ from .const import (
     RESTORABLE_STATE_KEYS,
     SIGNATURE_PREFIX,
     SUPPORTED_EVENTS,
+    USER_EVENT_TYPES,
+    signal_event,
     signal_update,
 )
 from .runtime import ATHLTHClientRuntime, ATHLTHRuntimeData
@@ -123,11 +125,18 @@ async def async_handle_webhook(
                 "event": event_type,
                 "duplicate": True,
                 "server_time": now,
+                "commands": client.pending_commands,
             },
             headers={"Cache-Control": "no-store"},
         )
 
-    _apply_event(client, event_type, payload, now)
+    if event_type == "command_ack":
+        await runtime.async_ack_commands(
+            client,
+            payload.get("ids", []),
+        )
+    else:
+        _apply_event(client, event_type, payload, now)
 
     public_payload = {
         key: value
@@ -137,14 +146,25 @@ async def async_handle_webhook(
 
     # The event bus is intentionally local to the user's Home Assistant.
     # Secrets, webhook identifiers and internal delivery IDs are not exposed.
-    hass.bus.async_fire(
-        f"{DOMAIN}_{event_type}",
-        {
-            "event": event_type,
-            "payload": public_payload,
-            "client_id": client.client_id,
-        },
-    )
+    if event_type != "command_ack":
+        hass.bus.async_fire(
+            f"{DOMAIN}_{event_type}",
+            {
+                "event": event_type,
+                "payload": public_payload,
+                "client_id": client.client_id,
+            },
+        )
+
+    if event_type in USER_EVENT_TYPES:
+        async_dispatcher_send(
+            hass,
+            signal_event(runtime.entry_id),
+            client.client_id,
+            event_type,
+            public_payload,
+        )
+
     async_dispatcher_send(hass, signal_update(runtime.entry_id))
 
     if isinstance(delivery_id, str):
@@ -159,6 +179,7 @@ async def async_handle_webhook(
             "event": event_type,
             "duplicate": False,
             "server_time": now,
+            "commands": client.pending_commands,
         },
         headers={"Cache-Control": "no-store"},
     )
@@ -283,6 +304,11 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
         "weekly_distance_km": (0, 5000),
         "last_workout_duration_seconds": (0, 604800),
         "last_workout_distance_meters": (0, 5_000_000),
+        "goal_progress": (0, 100),
+        "goal_days_remaining": (0, 36_500),
+        "training_streak": (0, 36_500),
+        "weekly_workout_count": (0, 10_000),
+        "pending_delivery_count": (0, 100),
     }
 
     for key, (minimum, maximum) in ranges.items():
@@ -291,6 +317,34 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
             continue
         if not _number_in_range(value, minimum, maximum):
             return f"invalid_{key}"
+
+    recovery_state = state.get("recovery_state")
+    if recovery_state is not None and recovery_state not in {
+        "building_baseline",
+        "ready",
+        "balanced",
+        "take_it_easy",
+        "recover",
+    }:
+        return "invalid_recovery_state"
+
+    calendar_events = state.get("calendar_events")
+    if calendar_events is not None:
+        if not isinstance(calendar_events, list) or len(calendar_events) > 64:
+            return "invalid_calendar_events"
+
+        for event in calendar_events:
+            if not isinstance(event, dict):
+                return "invalid_calendar_events"
+            if not set(event).issubset(
+                {"id", "title", "start", "end", "type"}
+            ):
+                return "invalid_calendar_events"
+            if not all(
+                isinstance(event.get(key), str) and event.get(key)
+                for key in ("id", "title", "start", "end")
+            ):
+                return "invalid_calendar_events"
 
     return None
 
@@ -381,6 +435,7 @@ async def _rotate_shared_secret(
     client.shared_secret = shared_secret
     client.nonces.clear()
     client.delivery_ids.clear()
+    client.pending_commands.clear()
     client.state.clear()
     client.state["workout_active"] = False
 
