@@ -1,0 +1,47 @@
+name: Publish ATHLTH Home Assistant v0.3.0
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-v0.3.0.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish v0.3.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if gh release view v0.3.0 >/dev/null 2>&1; then
+            echo "v0.3.0 already exists; nothing to do."
+            exit 0
+          fi
+
+          gh release create v0.3.0 \
+            --target "${GITHUB_SHA}" \
+            --title "0.3.0" \
+            --notes "ATHLTH Home Assistant 0.3.0
+
+          New in 0.3.0:
+          - Live workout state for Home Assistant dashboards and automations.
+          - Workout phase, elapsed time, distance, pace/speed and optional heart-rate zone.
+          - Indoor/treadmill state with incline support.
+          - Strength live context with exercise, set, reps, weight, rest time and rowing resistance/distance.
+          - New event types for strength sets, personal records, achievements, goals and challenges.
+          - New Home Assistant actions for sync, notifications, opening planned workouts, scheduling standalone extra workouts and moving standalone workouts.
+          - Scheduling from Home Assistant does not modify the active ATHLTH training plan.
+          - Connection-health entity for stale sync and backed-up queues.
+          - New home gym, treadmill, workout-finished, recovery-evening and PR celebration blueprints.
+          - Existing pairing and signed webhook protocol remains backwards compatible.
+          - Validated against Home Assistant 2026.9.4 and 2026.10 beta.
+          - hassfest, privacy scan and Python tests pass."
