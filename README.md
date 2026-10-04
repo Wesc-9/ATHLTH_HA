@@ -27,14 +27,15 @@ Open **ATHLTH → Settings → Connections → Home Assistant**. ATHLTH discover
 1. The user explicitly signs in to their own Home Assistant instance during pairing.
 2. ATHLTH uses OAuth with PKCE for the pairing step.
 3. The authenticated app calls `POST /api/athlth/pair`.
-4. Home Assistant returns a random per-installation webhook ID and signing secret.
-5. ATHLTH stores only the pairing material in the iOS Keychain.
-6. The temporary Home Assistant OAuth session is revoked after pairing.
-7. Normal updates use HMAC-SHA256 signed webhook requests.
-8. Home Assistant rejects stale timestamps, replayed nonces, unknown events, oversized payloads and invalid signatures.
-9. Re-pairing or disconnecting rotates the secret and invalidates the old pairing.
+4. Home Assistant returns a webhook endpoint plus a random signing secret for that ATHLTH app installation.
+5. Each paired ATHLTH app installation has its own client ID and signing secret. Pairing another household member does not invalidate existing clients.
+6. ATHLTH stores pairing material in the iOS Keychain. If workout-state sharing is enabled, the paired Apple Watch receives only the webhook pairing material it needs and stores it in the Watch Keychain.
+7. The temporary Home Assistant OAuth session is revoked after pairing.
+8. Normal updates use HMAC-SHA256 signed webhook requests.
+9. Home Assistant rejects stale timestamps, replayed nonces, duplicate reliable deliveries, unknown events, oversized payloads and invalid signatures.
+10. Re-pairing or disconnecting rotates only that client's secret and does not affect other paired ATHLTH users.
 
-The webhook ID and signing secret are credentials. They are never written to logs or exposed by diagnostics.
+Webhook URLs and signing secrets are credentials. They are never written to logs or exposed by diagnostics. Diagnostics report only an anonymous client count, not client IDs, names, workout values or health values.
 
 ## Privacy
 
@@ -45,6 +46,8 @@ Health-derived data is only sent to the Home Assistant instance selected by the 
 Home Assistant diagnostics intentionally exclude workout values, health values, names, locations and identifiers. Sensitive config-entry values are redacted.
 
 ## Entities
+
+ATHLTH creates one device/entity set per paired ATHLTH app installation. The first paired client keeps the simple entity IDs below; additional clients receive separate Home Assistant devices and unique entity IDs.
 
 ATHLTH currently exposes:
 
@@ -76,6 +79,7 @@ Example uses include changing workout-room lighting, starting ventilation, trigg
 
 Each request includes:
 
+- `X-ATHLTH-Client-ID`: random app-installation identifier used to select the correct per-client signing key
 - `X-ATHLTH-Timestamp`: Unix timestamp in seconds
 - `X-ATHLTH-Nonce`: unique random value per request
 - `X-ATHLTH-Signature`: `sha256=<hex digest>`
@@ -94,7 +98,9 @@ Home Assistant accepts only documented ATHLTH events and payloads up to 64 KiB.
 - Integration protocol: **1**
 - Signature algorithm: **HMAC-SHA256**
 
-The first public release supports one ATHLTH app pairing per Home Assistant instance. Pairing a new ATHLTH app intentionally invalidates the previous pairing secret.
+One Home Assistant instance can pair multiple ATHLTH app installations independently. Each client has its own signing secret and entity set.
+
+When an Apple Watch is recording without a reachable iPhone, it can send only workout start/stop state directly to Home Assistant. Continuous heart rate, GPS and other live health telemetry are intentionally not sent by the Watch integration. The iPhone remains authoritative for the completed workout details when it reconnects.
 
 ## Development
 
