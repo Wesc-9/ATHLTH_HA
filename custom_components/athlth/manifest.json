@@ -5,9 +5,9 @@
   "config_flow": true,
   "dependencies": ["http", "webhook"],
   "documentation": "https://github.com/Wesc-9/ATHLTH_HA",
-  "issue_tracker": "https://github.com/Wesc-9/ATHLTH_HA/issues",
   "integration_type": "service",
   "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/Wesc-9/ATHLTH_HA/issues",
   "requirements": [],
   "single_config_entry": true,
   "version": "0.1.0"
