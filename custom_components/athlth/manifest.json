@@ -1,6 +1,7 @@
 {
   "domain": "athlth",
   "name": "ATHLTH",
+  "after_dependencies": ["cloud"],
   "codeowners": ["@Wesc-9"],
   "config_flow": true,
   "dependencies": ["http", "webhook"],
