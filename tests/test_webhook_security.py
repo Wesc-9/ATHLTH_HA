@@ -223,3 +223,77 @@ def test_command_ack_contract_is_bounded():
         )
         == "invalid_command_ack"
     )
+
+
+def test_live_workout_snapshot_contract():
+    """Live workout state is bounded and uses documented phases."""
+    valid = {
+        "event": "sync_snapshot",
+        "payload": {
+            "state": {
+                "workout_active": True,
+                "workout_phase": "active",
+                "active_workout_elapsed_seconds": 1234,
+                "active_workout_distance_meters": 5012.5,
+                "active_workout_pace_seconds_per_km": 310,
+                "active_workout_speed_kmh": 11.6,
+                "active_workout_heart_rate_bpm": 152,
+                "active_workout_heart_rate_zone": 4,
+                "active_workout_environment": "treadmill",
+                "treadmill_incline_percent": 2.5,
+            }
+        },
+    }
+    assert _validate_message(valid) is None
+
+    invalid = {
+        "event": "sync_snapshot",
+        "payload": {"state": {"workout_phase": "teleporting"}},
+    }
+    assert _validate_message(invalid) == "invalid_workout_phase"
+
+
+def test_strength_set_event_contract():
+    """Strength and rowing details stay inside safe bounds."""
+    assert (
+        _validate_message(
+            {
+                "event": "strength_set_completed",
+                "payload": {
+                    "current_exercise": "Bench press",
+                    "current_exercise_index": 0,
+                    "current_set": 2,
+                    "current_set_index": 1,
+                    "current_set_total": 4,
+                    "current_reps": 8,
+                    "current_weight_kg": 100,
+                    "current_resistance_level": 5,
+                    "current_rest_seconds": 90,
+                    "current_row_distance_meters": 500,
+                },
+            }
+        )
+        is None
+    )
+    assert (
+        _validate_message(
+            {
+                "event": "strength_set_updated",
+                "payload": {"current_resistance_level": 11},
+            }
+        )
+        == "invalid_current_resistance_level"
+    )
+
+
+def test_achievement_and_record_events_are_documented():
+    """PR and achievement events can be automated in Home Assistant."""
+    for event in (
+        "personal_record",
+        "achievement_unlocked",
+        "goal_completed",
+        "challenge_completed",
+    ):
+        assert _validate_message(
+            {"event": event, "payload": {"title": "Example"}}
+        ) is None
