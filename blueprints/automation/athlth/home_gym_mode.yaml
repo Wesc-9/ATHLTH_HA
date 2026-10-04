@@ -1,0 +1,35 @@
+blueprint:
+  name: ATHLTH · Home gym mode
+  description: Run actions when an ATHLTH workout starts and optional cleanup actions when it ends.
+  domain: automation
+  input:
+    workout_sensor:
+      name: ATHLTH workout active
+      selector:
+        entity:
+          domain: binary_sensor
+    start_actions:
+      name: Start actions
+      selector:
+        action: {}
+    end_actions:
+      name: End actions
+      default: []
+      selector:
+        action: {}
+trigger:
+  - platform: state
+    entity_id: !input workout_sensor
+    to: "on"
+    id: start
+  - platform: state
+    entity_id: !input workout_sensor
+    to: "off"
+    id: end
+action:
+  - choose:
+      - conditions: "{{ trigger.id == 'start' }}"
+        sequence: !input start_actions
+      - conditions: "{{ trigger.id == 'end' }}"
+        sequence: !input end_actions
+mode: restart
