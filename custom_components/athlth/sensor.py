@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import override
 
 from homeassistant.components.sensor import (
     RestoreSensor,
+    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfLength, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DATA_RUNTIMES,
@@ -51,6 +55,51 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         key="next_workout",
         name="Next workout",
         icon="mdi:calendar-clock",
+    ),
+    SensorEntityDescription(
+        key="next_workout_time",
+        name="Next workout time",
+        icon="mdi:calendar-clock",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
+        key="sleep_duration_minutes",
+        name="Sleep duration",
+        icon="mdi:sleep",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+    ),
+    SensorEntityDescription(
+        key="hrv_milliseconds",
+        name="HRV",
+        icon="mdi:heart-pulse",
+        native_unit_of_measurement="ms",
+    ),
+    SensorEntityDescription(
+        key="resting_heart_rate",
+        name="Resting heart rate",
+        icon="mdi:heart",
+        native_unit_of_measurement="bpm",
+    ),
+    SensorEntityDescription(
+        key="respiratory_rate",
+        name="Respiratory rate",
+        icon="mdi:lungs",
+        native_unit_of_measurement="breaths/min",
+    ),
+    SensorEntityDescription(
+        key="weekly_training_minutes",
+        name="Weekly training minutes",
+        icon="mdi:timer-outline",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+    ),
+    SensorEntityDescription(
+        key="weekly_distance_km",
+        name="Weekly distance",
+        icon="mdi:map-marker-distance",
+        device_class=SensorDeviceClass.DISTANCE,
+        native_unit_of_measurement=UnitOfLength.KILOMETERS,
     ),
 )
 
@@ -128,14 +177,49 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
     @property
     def native_value(self):
         """Return the latest state received from this ATHLTH client."""
-        return self._client.state.get(self.entity_description.key)
+        value = self._client.state.get(self.entity_description.key)
+
+        if (
+            self.entity_description.device_class == SensorDeviceClass.TIMESTAMP
+            and isinstance(value, str)
+        ):
+            return dt_util.parse_datetime(value)
+
+        return value
 
     @property
     def extra_state_attributes(self):
-        """Return non-sensitive connection metadata."""
-        return {
+        """Return non-sensitive metadata and useful workout details."""
+        attributes = {
             "last_seen": self._client.last_seen,
             "last_event": self._client.state.get("last_event"),
+        }
+
+        if self.entity_description.key == "last_workout":
+            attributes.update(
+                {
+                    "type": self._client.state.get("last_workout_type"),
+                    "duration_seconds": self._client.state.get(
+                        "last_workout_duration_seconds"
+                    ),
+                    "distance_meters": self._client.state.get(
+                        "last_workout_distance_meters"
+                    ),
+                    "ended_at": self._client.state.get(
+                        "last_workout_ended_at"
+                    ),
+                }
+            )
+
+        if self.entity_description.key == "next_workout":
+            attributes["scheduled_at"] = self._client.state.get(
+                "next_workout_time"
+            )
+
+        return {
+            key: value
+            for key, value in attributes.items()
+            if value is not None
         }
 
     @override
@@ -147,7 +231,10 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
         if key not in self._client.state:
             restored = await self.async_get_last_sensor_data()
             if restored is not None and restored.native_value is not None:
-                self._client.state[key] = restored.native_value
+                value = restored.native_value
+                if isinstance(value, datetime):
+                    value = value.isoformat()
+                self._client.state[key] = value
 
         self.async_on_remove(
             async_dispatcher_connect(
