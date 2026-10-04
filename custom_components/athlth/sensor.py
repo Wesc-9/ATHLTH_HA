@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+from typing import override
+
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorEntity,
+    SensorEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -28,6 +34,7 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         key="training_load",
         name="Training load",
         icon="mdi:chart-line",
+        native_unit_of_measurement="x",
     ),
     SensorEntityDescription(
         key="weekly_progress",
@@ -58,10 +65,11 @@ async def async_setup_entry(
     )
 
 
-class ATHLTHSensor(SensorEntity):
+class ATHLTHSensor(RestoreSensor, SensorEntity):
     """Representation of an ATHLTH sensor."""
 
     _attr_has_entity_name = True
+    _attr_should_poll = False
 
     def __init__(
         self,
@@ -93,8 +101,17 @@ class ATHLTHSensor(SensorEntity):
             "last_event": self._runtime.state.get("last_event"),
         }
 
+    @override
     async def async_added_to_hass(self) -> None:
-        """Subscribe to ATHLTH webhook updates."""
+        """Restore the previous value and subscribe to webhook updates."""
+        await super().async_added_to_hass()
+
+        key = self.entity_description.key
+        if key not in self._runtime.state:
+            restored = await self.async_get_last_sensor_data()
+            if restored is not None and restored.native_value is not None:
+                self._runtime.state[key] = restored.native_value
+
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
