@@ -172,7 +172,7 @@ async def async_register_services(
 
     async def schedule_extra_workout(call: ServiceCall) -> None:
         data = {
-            "workout_id": uuid.uuid4().hex,
+            "workout_id": str(uuid.uuid4()),
             "title": call.data["title"],
             "scheduled_at": call.data["scheduled_at"],
             "workout_type": call.data["workout_type"],
