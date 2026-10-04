@@ -1,0 +1,14 @@
+{
+  "title": "ATHLTH",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect ATHLTH",
+        "description": "Add the ATHLTH bridge to Home Assistant. Pairing with the ATHLTH app is completed securely from the app and does not require you to create or paste an API key."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "ATHLTH is already configured."
+    }
+  }
+}
