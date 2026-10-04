@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.storage import Store
 
 from .api import ATHLTHPairView
 from .const import (
@@ -65,12 +66,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if data != dict(entry.data):
         hass.config_entries.async_update_entry(entry, data=data)
 
+    delivery_store: Store = Store(
+        hass,
+        1,
+        f"{DOMAIN}.{entry.entry_id}.delivery_ids",
+    )
+    stored_delivery_data = await delivery_store.async_load() or {}
+    raw_delivery_ids = stored_delivery_data.get("delivery_ids", {})
+    delivery_ids = {
+        key: float(value)
+        for key, value in raw_delivery_ids.items()
+        if isinstance(key, str)
+        and isinstance(value, (int, float))
+    }
+
     runtime = ATHLTHRuntimeData(
         entry_id=entry.entry_id,
         webhook_id=webhook_id,
         webhook_url=webhook_url,
         shared_secret=shared_secret,
         uses_cloudhook=uses_cloudhook,
+        delivery_ids=delivery_ids,
+        delivery_store=delivery_store,
     )
 
     domain_data = hass.data.setdefault(DOMAIN, {})
