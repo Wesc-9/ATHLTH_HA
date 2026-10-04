@@ -30,10 +30,12 @@ from .const import (
     MAX_NONCE_LENGTH,
     MAX_PAYLOAD_BYTES,
     NONCE_TTL_SECONDS,
+    LIVE_STATE_KEYS,
     RESTORABLE_STATE_KEYS,
     SIGNATURE_PREFIX,
     SUPPORTED_EVENTS,
     USER_EVENT_TYPES,
+    WORKOUT_PHASES,
     signal_event,
     signal_update,
 )
@@ -284,6 +286,28 @@ def _validate_message(message: object) -> str | None:
         if not _number_in_range(payload.get("percent"), 0, 100):
             return "invalid_weekly_progress"
 
+    elif event_type == "workout_phase_updated":
+        if payload.get("phase") not in WORKOUT_PHASES:
+            return "invalid_workout_phase"
+
+    elif event_type in {"strength_set_updated", "strength_set_completed"}:
+        ranges = {
+            "current_exercise_index": (0, 500),
+            "current_set": (1, 1000),
+            "current_set_index": (0, 999),
+            "current_set_total": (1, 1000),
+            "current_reps": (0, 10000),
+            "current_weight_kg": (0, 2000),
+            "current_resistance_level": (1, 10),
+            "current_rest_seconds": (0, 7200),
+            "current_row_distance_meters": (0, 1_000_000),
+        }
+        for key, (minimum, maximum) in ranges.items():
+            if key in payload and not _number_in_range(
+                payload.get(key), minimum, maximum
+            ):
+                return f"invalid_{key}"
+
     elif event_type == "sync_snapshot":
         state = payload.get("state", {})
         if not isinstance(state, dict):
@@ -330,6 +354,22 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
         "training_streak": (0, 36_500),
         "weekly_workout_count": (0, 10_000),
         "pending_delivery_count": (0, 100),
+        "active_workout_elapsed_seconds": (0, 604800),
+        "active_workout_distance_meters": (0, 5_000_000),
+        "active_workout_pace_seconds_per_km": (0, 7200),
+        "active_workout_speed_kmh": (0, 100),
+        "active_workout_heart_rate_bpm": (20, 260),
+        "active_workout_heart_rate_zone": (1, 5),
+        "treadmill_incline_percent": (-20, 40),
+        "current_exercise_index": (0, 500),
+        "current_set": (1, 1000),
+        "current_set_index": (0, 999),
+        "current_set_total": (1, 1000),
+        "current_reps": (0, 10000),
+        "current_weight_kg": (0, 2000),
+        "current_resistance_level": (1, 10),
+        "current_rest_seconds": (0, 7200),
+        "current_row_distance_meters": (0, 1_000_000),
     }
 
     for key, (minimum, maximum) in ranges.items():
@@ -338,6 +378,20 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
             continue
         if not _number_in_range(value, minimum, maximum):
             return f"invalid_{key}"
+
+    workout_phase = state.get("workout_phase")
+    if workout_phase is not None and workout_phase not in WORKOUT_PHASES:
+        return "invalid_workout_phase"
+
+    environment = state.get("active_workout_environment")
+    if environment is not None and environment not in {
+        "outdoor",
+        "indoor",
+        "treadmill",
+        "gym",
+        "unknown",
+    }:
+        return "invalid_active_workout_environment"
 
     recovery_state = state.get("recovery_state")
     if recovery_state is not None and recovery_state not in {
@@ -479,6 +533,28 @@ async def _rotate_shared_secret(
         await runtime.async_save_additional_clients()
 
 
+def _clear_live_state(client: ATHLTHClientRuntime) -> None:
+    """Remove transient workout details after a workout ends."""
+    for key in LIVE_STATE_KEYS:
+        client.state.pop(key, None)
+
+
+def _copy_live_fields(
+    client: ATHLTHClientRuntime,
+    payload: dict[str, Any],
+) -> None:
+    """Copy only documented transient live fields."""
+    for key in LIVE_STATE_KEYS:
+        if key in payload:
+            client.state[key] = payload[key]
+
+    entity_state = payload.get("entity_state")
+    if isinstance(entity_state, dict):
+        for key, value in entity_state.items():
+            if key in LIVE_STATE_KEYS:
+                client.state[key] = value
+
+
 def _apply_event(
     client: ATHLTHClientRuntime,
     event_type: str,
@@ -504,8 +580,10 @@ def _apply_event(
         client.state["active_workout_type"] = payload.get("type")
         client.state["active_workout_started_at"] = payload.get("started_at")
         client.state["active_workout_device"] = payload.get("device")
+        client.state["workout_phase"] = payload.get("phase") or "active"
+        _copy_live_fields(client, payload)
 
-    elif event_type == "workout_updated":
+    elif event_type in {"workout_updated", "workout_phase_updated"}:
         client.state["workout_active"] = True
         if payload.get("name") or payload.get("workout_name"):
             client.state["active_workout"] = (
@@ -517,13 +595,28 @@ def _apply_event(
             client.state["active_workout_started_at"] = payload["started_at"]
         if payload.get("device"):
             client.state["active_workout_device"] = payload["device"]
+        if payload.get("phase") in WORKOUT_PHASES:
+            client.state["workout_phase"] = payload["phase"]
+        _copy_live_fields(client, payload)
+
+    elif event_type in {"strength_set_updated", "strength_set_completed"}:
+        client.state["workout_active"] = True
+        client.state["active_workout_type"] = "strength"
+        client.state["workout_phase"] = (
+            "rest" if payload.get("current_rest_seconds", 0) else "active"
+        )
+        _copy_live_fields(client, payload)
 
     elif event_type == "workout_cancelled":
         client.state["workout_active"] = False
-        client.state.pop("active_workout", None)
-        client.state.pop("active_workout_type", None)
-        client.state.pop("active_workout_started_at", None)
-        client.state.pop("active_workout_device", None)
+        for key in (
+            "active_workout",
+            "active_workout_type",
+            "active_workout_started_at",
+            "active_workout_device",
+        ):
+            client.state.pop(key, None)
+        _clear_live_state(client)
 
     elif event_type == "workout_finished":
         client.state["workout_active"] = False
@@ -545,10 +638,14 @@ def _apply_event(
                 now,
             )
             client.state["last_workout_device"] = payload.get("device")
-        client.state.pop("active_workout", None)
-        client.state.pop("active_workout_type", None)
-        client.state.pop("active_workout_started_at", None)
-        client.state.pop("active_workout_device", None)
+        for key in (
+            "active_workout",
+            "active_workout_type",
+            "active_workout_started_at",
+            "active_workout_device",
+        ):
+            client.state.pop(key, None)
+        _clear_live_state(client)
 
     elif event_type == "recovery_updated":
         client.state["recovery_score"] = payload["score"]
@@ -565,6 +662,11 @@ def _apply_event(
             or payload.get("workout_name")
         )
         client.state["next_workout_time"] = payload.get("scheduled_at")
+
+    elif event_type == "goal_completed":
+        if payload.get("title"):
+            client.state["active_goal"] = payload["title"]
+        client.state["goal_progress"] = 100
 
     elif event_type == "sync_snapshot":
         snapshot = payload.get("state", {})
