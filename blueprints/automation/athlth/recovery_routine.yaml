@@ -1,0 +1,32 @@
+blueprint:
+  name: ATHLTH Recovery Routine
+  description: Run chosen actions when ATHLTH recovery drops below a threshold.
+  domain: automation
+  input:
+    recovery_score:
+      name: ATHLTH recovery score
+      selector:
+        entity:
+          domain: sensor
+    threshold:
+      name: Recovery threshold
+      default: 40
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+    recovery_actions:
+      name: Recovery actions
+      default: []
+      selector:
+        action: {}
+
+mode: single
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input recovery_score
+    below: !input threshold
+
+actions: !input recovery_actions
