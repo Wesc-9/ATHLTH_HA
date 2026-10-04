@@ -1,0 +1,31 @@
+blueprint:
+  name: ATHLTH Upcoming Workout
+  description: Run chosen actions before a planned ATHLTH workout starts.
+  domain: automation
+  input:
+    training_calendar:
+      name: ATHLTH training calendar
+      selector:
+        entity:
+          domain: calendar
+    offset:
+      name: Time before workout
+      description: Example -00:30:00 means 30 minutes before.
+      default: "-00:30:00"
+      selector:
+        text: {}
+    reminder_actions:
+      name: Reminder actions
+      default: []
+      selector:
+        action: {}
+
+mode: queued
+
+triggers:
+  - trigger: calendar
+    entity_id: !input training_calendar
+    event: start
+    offset: !input offset
+
+actions: !input reminder_actions
