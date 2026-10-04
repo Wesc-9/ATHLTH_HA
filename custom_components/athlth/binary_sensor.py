@@ -74,6 +74,11 @@ class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
             restored = await self.async_get_last_state()
             if restored is not None:
                 self._runtime.state["workout_active"] = restored.state == STATE_ON
+                active_workout = restored.attributes.get(
+                    "active_workout"
+                )
+                if isinstance(active_workout, str) and active_workout:
+                    self._runtime.state["active_workout"] = active_workout
 
         self.async_on_remove(
             async_dispatcher_connect(
