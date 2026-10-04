@@ -4,3 +4,19 @@ __pycache__/
 .mypy_cache/
 .coverage
 .DS_Store
+
+# Never commit local Home Assistant configuration or exported diagnostics.
+.env
+.env.*
+!.env.example
+.storage/
+config/
+secrets.yaml
+*.log
+diagnostics*.json
+home-assistant*.db
+home-assistant*.db-*
+
+# IDE-local files.
+.vscode/
+.idea/
