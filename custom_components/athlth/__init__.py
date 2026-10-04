@@ -14,6 +14,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.network import NoURLAvailableError
 from homeassistant.helpers.storage import Store
 
+from .actions import async_register_services
 from .api import ATHLTHLocalPairView, ATHLTHPairView
 from .const import (
     CONF_CLOUDHOOK_URL,
@@ -236,6 +237,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_register_services(hass)
     return True
 
 
