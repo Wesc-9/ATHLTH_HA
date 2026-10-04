@@ -154,3 +154,72 @@ def test_next_workout_timestamp_is_allowed_in_snapshot():
         )
         is None
     )
+
+
+def test_calendar_snapshot_and_recovery_state_are_validated():
+    """Calendar and recovery-state snapshots accept only documented shapes."""
+    valid = {
+        "event": "sync_snapshot",
+        "payload": {
+            "state": {
+                "recovery_state": "balanced",
+                "calendar_events": [
+                    {
+                        "id": "session-1",
+                        "title": "Intervals",
+                        "start": "2026-10-05T18:00:00+02:00",
+                        "end": "2026-10-05T19:00:00+02:00",
+                        "type": "running",
+                    }
+                ],
+            }
+        },
+    }
+    assert _validate_message(valid) is None
+
+    invalid_recovery = {
+        "event": "sync_snapshot",
+        "payload": {"state": {"recovery_state": "diagnosed_sick"}},
+    }
+    assert _validate_message(invalid_recovery) == "invalid_recovery_state"
+
+    invalid_calendar = {
+        "event": "sync_snapshot",
+        "payload": {
+            "state": {
+                "calendar_events": [
+                    {
+                        "id": "session-1",
+                        "title": "Intervals",
+                        "start": "2026-10-05T18:00:00+02:00",
+                        "end": "2026-10-05T19:00:00+02:00",
+                        "private_notes": "not allowed",
+                    }
+                ]
+            }
+        },
+    }
+    assert _validate_message(invalid_calendar) == "invalid_calendar_events"
+
+
+def test_command_ack_contract_is_bounded():
+    """Only a small list of command ids may be acknowledged."""
+    assert (
+        _validate_message(
+            {
+                "event": "command_ack",
+                "payload": {"ids": ["a", "b"]},
+            }
+        )
+        is None
+    )
+
+    assert (
+        _validate_message(
+            {
+                "event": "command_ack",
+                "payload": {"ids": ["x"] * 17},
+            }
+        )
+        == "invalid_command_ack"
+    )
