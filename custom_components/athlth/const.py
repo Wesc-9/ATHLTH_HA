@@ -52,8 +52,22 @@ RESTORABLE_STATE_KEYS = frozenset(
         "training_load",
         "weekly_progress",
         "next_workout",
+        "next_workout_time",
+        "sleep_duration_minutes",
+        "hrv_milliseconds",
+        "resting_heart_rate",
+        "respiratory_rate",
+        "weekly_training_minutes",
+        "weekly_distance_km",
         "workout_active",
         "active_workout",
+        "active_workout_type",
+        "active_workout_started_at",
+        "active_workout_device",
+        "last_workout_type",
+        "last_workout_duration_seconds",
+        "last_workout_distance_meters",
+        "last_workout_ended_at",
     }
 )
 
