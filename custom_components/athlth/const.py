@@ -13,6 +13,9 @@ DATA_API_REGISTERED = "api_registered"
 DATA_RUNTIMES = "runtimes"
 
 PAIR_API_PATH = "/api/athlth/pair"
+PAIR_LOCAL_API_PATH = "/api/athlth/pair/local"
+PAIRING_CODE_TTL_SECONDS = 300
+PAIRING_CODE_ATTEMPTS = 5
 
 HEADER_TIMESTAMP = "X-ATHLTH-Timestamp"
 HEADER_CLIENT_ID = "X-ATHLTH-Client-ID"
