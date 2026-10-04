@@ -19,8 +19,38 @@ HEADER_SIGNATURE = "X-ATHLTH-Signature"
 SIGNATURE_PREFIX = "sha256="
 MAX_CLOCK_SKEW_SECONDS = 300
 NONCE_TTL_SECONDS = 600
+MAX_PAYLOAD_BYTES = 64 * 1024
+MAX_NONCE_LENGTH = 128
 
 SUPPORTED_PROTOCOL_VERSION = 1
+SUPPORTED_SIGNATURE_ALGORITHM = "HMAC-SHA256"
+
+SUPPORTED_EVENTS = frozenset(
+    {
+        "workout_started",
+        "workout_updated",
+        "workout_finished",
+        "workout_cancelled",
+        "recovery_updated",
+        "training_load_updated",
+        "weekly_progress_updated",
+        "next_workout_updated",
+        "sync_snapshot",
+        "unpair",
+    }
+)
+
+RESTORABLE_STATE_KEYS = frozenset(
+    {
+        "last_workout",
+        "recovery_score",
+        "training_load",
+        "weekly_progress",
+        "next_workout",
+        "workout_active",
+        "active_workout",
+    }
+)
 
 
 def signal_update(entry_id: str) -> str:
