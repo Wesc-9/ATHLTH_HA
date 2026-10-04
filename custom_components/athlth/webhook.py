@@ -19,11 +19,13 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .const import (
     CONF_SHARED_SECRET,
     DATA_RUNTIMES,
+    DELIVERY_ID_TTL_SECONDS,
     DOMAIN,
     HEADER_NONCE,
     HEADER_SIGNATURE,
     HEADER_TIMESTAMP,
     MAX_CLOCK_SKEW_SECONDS,
+    MAX_DELIVERY_ID_LENGTH,
     MAX_NONCE_LENGTH,
     MAX_PAYLOAD_BYTES,
     NONCE_TTL_SECONDS,
@@ -99,31 +101,57 @@ async def async_handle_webhook(
 
     event_type = message["event"]
     payload = message.get("payload", {})
+    delivery_id = payload.get("delivery_id")
 
     runtime.nonces[nonce] = float(now)
     runtime.last_seen = float(now)
+    _purge_old_delivery_ids(runtime, now)
+
+    if (
+        isinstance(delivery_id, str)
+        and delivery_id in runtime.delivery_ids
+    ):
+        return web.json_response(
+            {
+                "ok": True,
+                "event": event_type,
+                "duplicate": True,
+                "server_time": now,
+            },
+            headers={"Cache-Control": "no-store"},
+        )
 
     _apply_event(runtime, event_type, payload, now)
 
+    public_payload = {
+        key: value
+        for key, value in payload.items()
+        if key != "delivery_id"
+    }
+
     # The event bus is intentionally local to the user's Home Assistant.
-    # Secrets and webhook identifiers are never included in event data.
+    # Secrets, webhook identifiers and internal delivery IDs are not exposed.
     hass.bus.async_fire(
         f"{DOMAIN}_{event_type}",
         {
             "event": event_type,
-            "payload": payload,
+            "payload": public_payload,
             "client_id": runtime.entry_id,
         },
     )
     async_dispatcher_send(hass, signal_update(runtime.entry_id))
 
+    if isinstance(delivery_id, str):
+        await _remember_delivery(runtime, delivery_id, now)
+
     if event_type == "unpair":
-        _rotate_shared_secret(hass, runtime)
+        await _rotate_shared_secret(hass, runtime)
 
     return web.json_response(
         {
             "ok": True,
             "event": event_type,
+            "duplicate": False,
             "server_time": now,
         },
         headers={"Cache-Control": "no-store"},
@@ -202,6 +230,14 @@ def _validate_message(message: object) -> str | None:
     if not _payload_has_safe_shape(payload):
         return "invalid_payload"
 
+    delivery_id = payload.get("delivery_id")
+    if delivery_id is not None and (
+        not isinstance(delivery_id, str)
+        or not delivery_id
+        or len(delivery_id) > MAX_DELIVERY_ID_LENGTH
+    ):
+        return "invalid_delivery_id"
+
     if event_type == "recovery_updated":
         if not _number_in_range(payload.get("score"), 0, 100):
             return "invalid_recovery_score"
@@ -268,7 +304,35 @@ def _purge_old_nonces(runtime: ATHLTHRuntimeData, now: int) -> None:
         runtime.nonces.pop(nonce, None)
 
 
-def _rotate_shared_secret(
+def _purge_old_delivery_ids(
+    runtime: ATHLTHRuntimeData,
+    now: int,
+) -> None:
+    cutoff = now - DELIVERY_ID_TTL_SECONDS
+    stale = [
+        delivery_id
+        for delivery_id, seen_at in runtime.delivery_ids.items()
+        if seen_at < cutoff
+    ]
+    for delivery_id in stale:
+        runtime.delivery_ids.pop(delivery_id, None)
+
+
+async def _remember_delivery(
+    runtime: ATHLTHRuntimeData,
+    delivery_id: str,
+    now: int,
+) -> None:
+    runtime.delivery_ids[delivery_id] = float(now)
+    _purge_old_delivery_ids(runtime, now)
+
+    if runtime.delivery_store is not None:
+        await runtime.delivery_store.async_save(
+            {"delivery_ids": runtime.delivery_ids}
+        )
+
+
+async def _rotate_shared_secret(
     hass: HomeAssistant,
     runtime: ATHLTHRuntimeData,
 ) -> None:
@@ -276,8 +340,14 @@ def _rotate_shared_secret(
     shared_secret = secrets.token_urlsafe(48)
     runtime.shared_secret = shared_secret
     runtime.nonces.clear()
+    runtime.delivery_ids.clear()
     runtime.state["workout_active"] = False
     runtime.state.pop("active_workout", None)
+
+    if runtime.delivery_store is not None:
+        await runtime.delivery_store.async_save(
+            {"delivery_ids": {}}
+        )
 
     entry = hass.config_entries.async_get_entry(runtime.entry_id)
     if entry is not None:
