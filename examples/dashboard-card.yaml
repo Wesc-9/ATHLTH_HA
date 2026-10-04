@@ -1,0 +1,55 @@
+type: vertical-stack
+cards:
+  - type: entities
+    title: ATHLTH
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.athlth_workout_active
+      - entity: sensor.athlth_recovery_score
+      - entity: sensor.athlth_recovery_state
+      - entity: sensor.athlth_training_load
+      - entity: sensor.athlth_sleep_duration
+      - entity: sensor.athlth_hrv
+      - entity: sensor.athlth_resting_heart_rate
+      - entity: sensor.athlth_respiratory_rate
+  - type: entities
+    title: Training
+    show_header_toggle: false
+    entities:
+      - entity: sensor.athlth_weekly_progress
+      - entity: sensor.athlth_weekly_workout_count
+      - entity: sensor.athlth_weekly_training_minutes
+      - entity: sensor.athlth_weekly_distance
+      - entity: sensor.athlth_training_streak
+      - entity: sensor.athlth_next_workout
+      - entity: sensor.athlth_next_workout_time
+      - entity: calendar.athlth_training
+  - type: entities
+    title: Goal
+    show_header_toggle: false
+    entities:
+      - entity: sensor.athlth_active_goal
+      - entity: sensor.athlth_goal_progress
+      - entity: sensor.athlth_goal_days_remaining
+  - type: entities
+    title: Connection
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.athlth_connected
+      - entity: sensor.athlth_last_sync
+      - entity: sensor.athlth_pending_deliveries
+      - entity: sensor.athlth_pending_commands
+  - type: horizontal-stack
+    cards:
+      - type: button
+        entity: button.athlth_refresh_athlth_data
+        name: Refresh
+        icon: mdi:sync
+      - type: button
+        entity: button.athlth_show_next_workout
+        name: Next
+        icon: mdi:calendar-clock
+      - type: button
+        entity: button.athlth_training_reminder
+        name: Reminder
+        icon: mdi:bell-ring-outline
