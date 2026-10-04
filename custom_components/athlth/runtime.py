@@ -154,12 +154,20 @@ class ATHLTHRuntimeData:
 
         payload = {
             "primary_pending_commands": self.primary_client.pending_commands,
+            "primary_calendar_events": self.primary_client.state.get(
+                "calendar_events",
+                [],
+            ),
             "clients": {
                 client_id: {
                     "name": client.name,
                     "shared_secret": client.shared_secret,
                     "delivery_ids": client.delivery_ids,
                     "pending_commands": client.pending_commands,
+                    "calendar_events": client.state.get(
+                        "calendar_events",
+                        [],
+                    ),
                 }
                 for client_id, client in self.clients.items()
                 if not client.is_primary
