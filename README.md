@@ -10,7 +10,7 @@ ATHLTH connects to Home Assistant without asking users to create, paste or store
 
 [![Open your Home Assistant instance and add the ATHLTH repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Wesc-9&repository=ATHLTH_HA&category=integration)
 
-Install **ATHLTH** from HACS and restart Home Assistant. Home Assistant **2026.10.0 or newer** is required.
+Install **ATHLTH** from HACS and restart Home Assistant. Home Assistant **2026.9.4 or newer** is required.
 
 ### 2. Add the integration
 
@@ -90,7 +90,7 @@ Home Assistant accepts only documented ATHLTH events and payloads up to 64 KiB.
 
 ## Compatibility
 
-- Home Assistant: **2026.10.0 or newer**
+- Home Assistant: **2026.9.4 or newer**
 - Integration protocol: **1**
 - Signature algorithm: **HMAC-SHA256**
 
@@ -100,7 +100,7 @@ The first public release supports one ATHLTH app pairing per Home Assistant inst
 
 The Home Assistant component lives entirely under `custom_components/athlth`. No source code, configuration files or credentials from the private ATHLTH application repository are required to install this integration.
 
-Validation runs with both HACS and Home Assistant hassfest. Security-sensitive changes should include tests.
+Validation runs with HACS, Home Assistant hassfest, and the automated test suite against both the current stable Home Assistant release and the upcoming beta. Security-sensitive changes should include tests.
 
 ## Support
 
