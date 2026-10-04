@@ -1,0 +1,44 @@
+name: Publish ATHLTH Home Assistant v0.2.0
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-v0.2.0.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish v0.2.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if gh release view v0.2.0 >/dev/null 2>&1; then
+            echo "v0.2.0 already exists; nothing to do."
+            exit 0
+          fi
+
+          gh release create v0.2.0 \
+            --target "${GITHUB_SHA}" \
+            --title "0.2.0" \
+            --notes "ATHLTH Home Assistant 0.2.0
+
+          Pairing v2:
+          - Home Assistant generates a one-time six-digit local pairing code.
+          - Codes expire after five minutes, can be used once, and lock after five failed attempts.
+          - The code is stored only as a salted SHA-256 digest in memory.
+          - Local code exchange is restricted to local/private network requests.
+          - ATHLTH exchanges the code for a long random per-device HMAC signing secret stored in Keychain.
+          - OAuth/PKCE remains available as a fallback.
+          - Existing 0.1.x config entries remain compatible without migration.
+          - Validated against Home Assistant 2026.9.4 and 2026.10 beta.
+          - hassfest and full-history privacy validation pass."
