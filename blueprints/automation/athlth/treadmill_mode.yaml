@@ -1,0 +1,20 @@
+blueprint:
+  name: ATHLTH · Treadmill mode
+  description: Run actions when ATHLTH reports an indoor treadmill workout.
+  domain: automation
+  input:
+    environment_sensor:
+      name: Workout environment
+      selector:
+        entity:
+          domain: sensor
+    actions:
+      name: Treadmill actions
+      selector:
+        action: {}
+trigger:
+  - platform: state
+    entity_id: !input environment_sensor
+    to: "treadmill"
+action: !input actions
+mode: restart
