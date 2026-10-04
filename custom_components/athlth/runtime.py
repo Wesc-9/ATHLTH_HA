@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+import uuid
 
 from homeassistant.helpers.storage import Store
 
@@ -18,6 +19,7 @@ class ATHLTHClientRuntime:
     state: dict[str, Any] = field(default_factory=dict)
     nonces: dict[str, float] = field(default_factory=dict)
     delivery_ids: dict[str, float] = field(default_factory=dict)
+    pending_commands: list[dict[str, Any]] = field(default_factory=list)
     last_seen: float | None = None
     is_primary: bool = False
 
@@ -96,20 +98,75 @@ class ATHLTHRuntimeData:
             ),
         )
 
-    async def async_save_additional_clients(self) -> None:
-        """Persist non-primary client credentials and delivery ids."""
+    async def async_enqueue_command(
+        self,
+        client_id: str,
+        command_type: str,
+        *,
+        title: str | None = None,
+        message: str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> bool:
+        """Queue a small command for delivery on the client's next signed sync."""
+        client = self.resolve_client(client_id)
+        if client is None:
+            return False
+
+        command: dict[str, Any] = {
+            "id": uuid.uuid4().hex,
+            "type": command_type,
+        }
+        if title:
+            command["title"] = title[:96]
+        if message:
+            command["message"] = message[:256]
+        if data:
+            command["data"] = data
+
+        client.pending_commands.append(command)
+        if len(client.pending_commands) > 16:
+            client.pending_commands = client.pending_commands[-16:]
+
+        await self.async_save_clients()
+        return True
+
+    async def async_ack_commands(
+        self,
+        client: ATHLTHClientRuntime,
+        command_ids: list[str],
+    ) -> None:
+        """Remove commands acknowledged by an ATHLTH client."""
+        if not command_ids:
+            return
+
+        acknowledged = set(command_ids)
+        client.pending_commands = [
+            command
+            for command in client.pending_commands
+            if command.get("id") not in acknowledged
+        ]
+        await self.async_save_clients()
+
+    async def async_save_clients(self) -> None:
+        """Persist additional clients and all pending command queues."""
         if self.client_store is None:
             return
 
         payload = {
+            "primary_pending_commands": self.primary_client.pending_commands,
             "clients": {
                 client_id: {
                     "name": client.name,
                     "shared_secret": client.shared_secret,
                     "delivery_ids": client.delivery_ids,
+                    "pending_commands": client.pending_commands,
                 }
                 for client_id, client in self.clients.items()
                 if not client.is_primary
-            }
+            },
         }
         await self.client_store.async_save(payload)
+
+    async def async_save_additional_clients(self) -> None:
+        """Backwards-compatible alias for existing callers."""
+        await self.async_save_clients()
