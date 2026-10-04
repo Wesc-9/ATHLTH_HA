@@ -25,7 +25,7 @@ from .runtime import ATHLTHRuntimeData
 class ATHLTHConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle ATHLTH setup."""
 
-    VERSION = 2
+    VERSION = 1
 
     @staticmethod
     @callback
