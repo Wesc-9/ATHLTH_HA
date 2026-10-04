@@ -262,6 +262,35 @@ def _validate_message(message: object) -> str | None:
             return "invalid_snapshot"
         if not set(state).issubset(RESTORABLE_STATE_KEYS):
             return "invalid_snapshot"
+        snapshot_error = _validate_snapshot_state(state)
+        if snapshot_error is not None:
+            return snapshot_error
+
+    return None
+
+
+def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
+    """Validate bounded numeric values in an ATHLTH snapshot."""
+    ranges = {
+        "recovery_score": (0, 100),
+        "training_load": (0, 10),
+        "weekly_progress": (0, 100),
+        "sleep_duration_minutes": (0, 1440),
+        "hrv_milliseconds": (0, 2000),
+        "resting_heart_rate": (20, 250),
+        "respiratory_rate": (1, 80),
+        "weekly_training_minutes": (0, 10080),
+        "weekly_distance_km": (0, 5000),
+        "last_workout_duration_seconds": (0, 604800),
+        "last_workout_distance_meters": (0, 5_000_000),
+    }
+
+    for key, (minimum, maximum) in ranges.items():
+        value = state.get(key)
+        if value is None:
+            continue
+        if not _number_in_range(value, minimum, maximum):
+            return f"invalid_{key}"
 
     return None
 
@@ -396,13 +425,29 @@ def _apply_event(
             or payload.get("workout_name")
             or payload.get("type")
         )
+        client.state["active_workout_type"] = payload.get("type")
+        client.state["active_workout_started_at"] = payload.get("started_at")
+        client.state["active_workout_device"] = payload.get("device")
 
     elif event_type == "workout_updated":
         client.state["workout_active"] = True
+        if payload.get("name") or payload.get("workout_name"):
+            client.state["active_workout"] = (
+                payload.get("name") or payload.get("workout_name")
+            )
+        if payload.get("type"):
+            client.state["active_workout_type"] = payload["type"]
+        if payload.get("started_at"):
+            client.state["active_workout_started_at"] = payload["started_at"]
+        if payload.get("device"):
+            client.state["active_workout_device"] = payload["device"]
 
     elif event_type == "workout_cancelled":
         client.state["workout_active"] = False
         client.state.pop("active_workout", None)
+        client.state.pop("active_workout_type", None)
+        client.state.pop("active_workout_started_at", None)
+        client.state.pop("active_workout_device", None)
 
     elif event_type == "workout_finished":
         client.state["workout_active"] = False
@@ -412,8 +457,21 @@ def _apply_event(
                 or payload.get("workout_name")
                 or payload.get("type")
             )
-            client.state["last_workout_at"] = payload.get("ended_at", now)
+            client.state["last_workout_type"] = payload.get("type")
+            client.state["last_workout_duration_seconds"] = payload.get(
+                "duration_seconds"
+            )
+            client.state["last_workout_distance_meters"] = payload.get(
+                "distance_meters"
+            )
+            client.state["last_workout_ended_at"] = payload.get(
+                "ended_at",
+                now,
+            )
         client.state.pop("active_workout", None)
+        client.state.pop("active_workout_type", None)
+        client.state.pop("active_workout_started_at", None)
+        client.state.pop("active_workout_device", None)
 
     elif event_type == "recovery_updated":
         client.state["recovery_score"] = payload["score"]
@@ -429,6 +487,7 @@ def _apply_event(
             payload.get("name")
             or payload.get("workout_name")
         )
+        client.state["next_workout_time"] = payload.get("scheduled_at")
 
     elif event_type == "sync_snapshot":
         snapshot = payload.get("state", {})
