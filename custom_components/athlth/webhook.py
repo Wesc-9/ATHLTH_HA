@@ -294,6 +294,20 @@ def _validate_message(message: object) -> str | None:
         if snapshot_error is not None:
             return snapshot_error
 
+    elif event_type == "command_ack":
+        command_ids = payload.get("ids")
+        if (
+            not isinstance(command_ids, list)
+            or len(command_ids) > 16
+            or any(
+                not isinstance(command_id, str)
+                or not command_id
+                or len(command_id) > 64
+                for command_id in command_ids
+            )
+        ):
+            return "invalid_command_ack"
+
     return None
 
 
