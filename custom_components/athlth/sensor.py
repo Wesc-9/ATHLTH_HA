@@ -101,6 +101,55 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.DISTANCE,
         native_unit_of_measurement=UnitOfLength.KILOMETERS,
     ),
+    SensorEntityDescription(
+        key="recovery_state",
+        name="Recovery state",
+        icon="mdi:heart-check",
+    ),
+    SensorEntityDescription(
+        key="active_goal",
+        name="Active goal",
+        icon="mdi:target",
+    ),
+    SensorEntityDescription(
+        key="goal_progress",
+        name="Goal progress",
+        icon="mdi:bullseye-arrow",
+        native_unit_of_measurement="%",
+    ),
+    SensorEntityDescription(
+        key="goal_days_remaining",
+        name="Goal days remaining",
+        icon="mdi:calendar-end",
+        native_unit_of_measurement=UnitOfTime.DAYS,
+    ),
+    SensorEntityDescription(
+        key="training_streak",
+        name="Training streak",
+        icon="mdi:fire",
+        native_unit_of_measurement=UnitOfTime.DAYS,
+    ),
+    SensorEntityDescription(
+        key="weekly_workout_count",
+        name="Weekly workout count",
+        icon="mdi:counter",
+    ),
+    SensorEntityDescription(
+        key="last_sync",
+        name="Last sync",
+        icon="mdi:cloud-sync",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
+        key="pending_delivery_count",
+        name="Pending deliveries",
+        icon="mdi:tray-arrow-up",
+    ),
+    SensorEntityDescription(
+        key="pending_commands",
+        name="Pending commands",
+        icon="mdi:tray-arrow-down",
+    ),
 )
 
 
@@ -177,7 +226,19 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
     @property
     def native_value(self):
         """Return the latest state received from this ATHLTH client."""
-        value = self._client.state.get(self.entity_description.key)
+        key = self.entity_description.key
+
+        if key == "last_sync":
+            if self._client.last_seen is None:
+                return None
+            return dt_util.utc_from_timestamp(
+                self._client.last_seen
+            )
+
+        if key == "pending_commands":
+            return len(self._client.pending_commands)
+
+        value = self._client.state.get(key)
 
         if (
             self.entity_description.device_class == SensorDeviceClass.TIMESTAMP
@@ -231,6 +292,16 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
         await super().async_added_to_hass()
 
         key = self.entity_description.key
+        if key in {"last_sync", "pending_commands"}:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    self.hass,
+                    signal_update(self._entry_id),
+                    self.async_write_ha_state,
+                )
+            )
+            return
+
         if key not in self._client.state:
             restored = await self.async_get_last_sensor_data()
             if restored is not None and restored.native_value is not None:
