@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfLength, UnitOfTime
+from homeassistant.const import UnitOfLength, UnitOfMass, UnitOfSpeed, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -149,6 +149,114 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         key="pending_commands",
         name="Pending commands",
         icon="mdi:tray-arrow-down",
+    ),
+    SensorEntityDescription(
+        key="workout_phase",
+        name="Workout phase",
+        icon="mdi:progress-clock",
+    ),
+    SensorEntityDescription(
+        key="active_workout_elapsed_seconds",
+        name="Workout elapsed",
+        icon="mdi:timer-outline",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+    ),
+    SensorEntityDescription(
+        key="active_workout_distance_meters",
+        name="Workout distance",
+        icon="mdi:map-marker-distance",
+        device_class=SensorDeviceClass.DISTANCE,
+        native_unit_of_measurement=UnitOfLength.METERS,
+    ),
+    SensorEntityDescription(
+        key="active_workout_pace_seconds_per_km",
+        name="Workout pace",
+        icon="mdi:speedometer",
+        native_unit_of_measurement="s/km",
+    ),
+    SensorEntityDescription(
+        key="active_workout_speed_kmh",
+        name="Workout speed",
+        icon="mdi:speedometer",
+        native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+    ),
+    SensorEntityDescription(
+        key="active_workout_heart_rate_bpm",
+        name="Workout heart rate",
+        icon="mdi:heart-pulse",
+        native_unit_of_measurement="bpm",
+    ),
+    SensorEntityDescription(
+        key="active_workout_heart_rate_zone",
+        name="Workout heart rate zone",
+        icon="mdi:heart-circle",
+    ),
+    SensorEntityDescription(
+        key="active_workout_environment",
+        name="Workout environment",
+        icon="mdi:home-map-marker",
+    ),
+    SensorEntityDescription(
+        key="treadmill_incline_percent",
+        name="Treadmill incline",
+        icon="mdi:angle-acute",
+        native_unit_of_measurement="%",
+    ),
+    SensorEntityDescription(
+        key="current_exercise",
+        name="Current exercise",
+        icon="mdi:dumbbell",
+    ),
+    SensorEntityDescription(
+        key="current_exercise_index",
+        name="Exercise number",
+        icon="mdi:format-list-numbered",
+    ),
+    SensorEntityDescription(
+        key="current_set",
+        name="Current set",
+        icon="mdi:counter",
+    ),
+    SensorEntityDescription(
+        key="current_set_index",
+        name="Set index",
+        icon="mdi:counter",
+    ),
+    SensorEntityDescription(
+        key="current_set_total",
+        name="Set total",
+        icon="mdi:counter",
+    ),
+    SensorEntityDescription(
+        key="current_reps",
+        name="Current reps",
+        icon="mdi:repeat",
+    ),
+    SensorEntityDescription(
+        key="current_weight_kg",
+        name="Current weight",
+        icon="mdi:weight-kilogram",
+        native_unit_of_measurement=UnitOfMass.KILOGRAMS,
+    ),
+    SensorEntityDescription(
+        key="current_resistance_level",
+        name="Resistance level",
+        icon="mdi:tune-vertical",
+    ),
+    SensorEntityDescription(
+        key="current_rest_seconds",
+        name="Rest remaining",
+        icon="mdi:timer-sand",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+    ),
+    SensorEntityDescription(
+        key="current_row_distance_meters",
+        name="Row distance",
+        icon="mdi:rowing",
+        device_class=SensorDeviceClass.DISTANCE,
+        native_unit_of_measurement=UnitOfLength.METERS,
     ),
 )
 
