@@ -286,11 +286,21 @@ async def _async_resolve_webhook_url(
             cloud.async_active_subscription(hass)
             and cloud.async_is_connected(hass)
         ):
-            cloudhook_url = await cloud.async_get_or_create_cloudhook(
-                hass, webhook_id
-            )
-            data[CONF_CLOUDHOOK_URL] = cloudhook_url
-            return cloudhook_url, True
+            # Cloud can disconnect between the state check above and the
+            # cloudhook request. Pairing must still work locally in that
+            # situation instead of leaving the config entry unloaded.
+            try:
+                cloudhook_url = await cloud.async_get_or_create_cloudhook(
+                    hass, webhook_id
+                )
+            except (
+                cloud.CloudNotAvailable,
+                cloud.CloudNotConnected,
+            ):
+                pass
+            else:
+                data[CONF_CLOUDHOOK_URL] = cloudhook_url
+                return cloudhook_url, True
 
     data.pop(CONF_CLOUDHOOK_URL, None)
 
