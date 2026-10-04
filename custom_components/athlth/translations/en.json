@@ -10,5 +10,16 @@
     "abort": {
       "single_instance_allowed": "ATHLTH is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pair ATHLTH locally",
+        "description": "Open ATHLTH on your iPhone and choose Home Assistant. Select this Home Assistant instance, then enter **{pairing_code}**.\\n\\nLocal address: `{address}`\\n\\nThe code expires in {expires_minutes} minutes and can be used once. OAuth remains available as a fallback from the ATHLTH app."
+      }
+    },
+    "abort": {
+      "not_loaded": "ATHLTH is not loaded yet. Reload the integration and try again."
+    }
   }
 }
