@@ -1,0 +1,21 @@
+blueprint:
+  name: ATHLTH · Workout finished
+  description: Run actions whenever an ATHLTH workout changes from active to inactive.
+  domain: automation
+  input:
+    workout_sensor:
+      name: ATHLTH workout active
+      selector:
+        entity:
+          domain: binary_sensor
+    actions:
+      name: Finish actions
+      selector:
+        action: {}
+trigger:
+  - platform: state
+    entity_id: !input workout_sensor
+    from: "on"
+    to: "off"
+action: !input actions
+mode: restart
