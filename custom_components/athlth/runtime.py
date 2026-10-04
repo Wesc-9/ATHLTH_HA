@@ -10,7 +10,9 @@ class ATHLTHRuntimeData:
 
     entry_id: str
     webhook_id: str
+    webhook_url: str
     shared_secret: str
+    uses_cloudhook: bool = False
     state: dict[str, Any] = field(default_factory=dict)
     nonces: dict[str, float] = field(default_factory=dict)
     last_seen: float | None = None
