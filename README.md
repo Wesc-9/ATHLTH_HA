@@ -63,7 +63,20 @@ ATHLTH currently exposes:
 - `sensor.athlth_respiratory_rate`
 - `sensor.athlth_weekly_training_minutes`
 - `sensor.athlth_weekly_distance`
+- `sensor.athlth_recovery_state`
+- `sensor.athlth_active_goal`
+- `sensor.athlth_goal_progress`
+- `sensor.athlth_goal_days_remaining`
+- `sensor.athlth_training_streak`
+- `sensor.athlth_weekly_workout_count`
+- `sensor.athlth_last_sync`
+- `sensor.athlth_pending_deliveries`
+- `sensor.athlth_pending_commands`
 - `binary_sensor.athlth_workout_active`
+- `binary_sensor.athlth_connected`
+- `calendar.athlth_training`
+- `event.athlth_events`
+- `notify.athlth_notification`
 
 The active-workout binary sensor also exposes workout name, type, start time and recording device when available. The last-workout sensor exposes type, duration, distance, end time and recording device. Sleep, HRV, resting heart rate, respiratory rate, recovery and training load are individually controlled from ATHLTH and health-derived sharing is off by default.
 
