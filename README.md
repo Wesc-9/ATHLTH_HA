@@ -18,22 +18,27 @@ Install **ATHLTH** from HACS and restart Home Assistant. Home Assistant **2026.9
 
 You can also open **Settings → Devices & services → Add integration** and search for **ATHLTH**.
 
-### 3. Pair from the ATHLTH app
+### 3. Generate a local pairing code
 
-Open **ATHLTH → Settings → Connections → Home Assistant**. ATHLTH discovers local Home Assistant instances automatically, or you can enter an address manually.
+Open **Settings → Devices & services → ATHLTH → Configure** in Home Assistant. Home Assistant displays a six-digit one-time pairing code and the local address it expects ATHLTH to use. The code expires after five minutes and can only be used once.
+
+### 4. Pair from the ATHLTH app
+
+Open **ATHLTH → Settings → Connections → Home Assistant**. Enter the six-digit code, then select the discovered Home Assistant instance. If discovery is unavailable, enter the local Home Assistant address manually. OAuth/PKCE sign-in remains available as a fallback for advanced or non-local setups.
 
 ## Security model
 
-1. The user explicitly signs in to their own Home Assistant instance during pairing.
-2. ATHLTH uses OAuth with PKCE for the pairing step.
-3. The authenticated app calls `POST /api/athlth/pair`.
-4. Home Assistant returns a webhook endpoint plus a random signing secret for that ATHLTH app installation.
-5. Each paired ATHLTH app installation has its own client ID and signing secret. Pairing another household member does not invalidate existing clients.
-6. ATHLTH stores pairing material in the iOS Keychain. If workout-state sharing is enabled, the paired Apple Watch receives only the webhook pairing material it needs and stores it in the Watch Keychain.
-7. The temporary Home Assistant OAuth session is revoked after pairing.
-8. Normal updates use HMAC-SHA256 signed webhook requests.
-9. Home Assistant rejects stale timestamps, replayed nonces, duplicate reliable deliveries, unknown events, oversized payloads and invalid signatures.
-10. Re-pairing or disconnecting rotates only that client's secret and does not affect other paired ATHLTH users.
+1. An authenticated Home Assistant administrator explicitly generates a short-lived six-digit pairing code.
+2. The code is kept only in memory as a salted SHA-256 digest, expires after five minutes and is invalidated after successful use or five failed attempts.
+3. The unauthenticated code-exchange endpoint accepts requests only from local/private network addresses.
+4. ATHLTH exchanges the one-time code for a random per-installation client ID, webhook endpoint and long signing secret.
+5. The six-digit code is never used for normal communication and is not stored in ATHLTH.
+6. Each paired ATHLTH app installation has its own client ID and signing secret. Pairing another household member does not invalidate existing clients.
+7. ATHLTH stores pairing material in the iOS Keychain. If workout-state sharing is enabled, the paired Apple Watch receives only the webhook pairing material it needs and stores it in the Watch Keychain.
+8. OAuth with PKCE remains available as a fallback. Any temporary OAuth refresh token is revoked after pairing.
+9. Normal updates use HMAC-SHA256 signed webhook requests.
+10. Home Assistant rejects stale timestamps, replayed nonces, duplicate reliable deliveries, unknown events, oversized payloads and invalid signatures.
+11. Re-pairing or disconnecting rotates only that client's secret and does not affect other paired ATHLTH users.
 
 Webhook URLs and signing secrets are credentials. They are never written to logs or exposed by diagnostics. Diagnostics report only an anonymous client count, not client IDs, names, workout values or health values.
 
