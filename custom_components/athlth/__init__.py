@@ -33,6 +33,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
+    Platform.CAMERA,
     Platform.BINARY_SENSOR,
     Platform.CALENDAR,
     Platform.EVENT,
@@ -127,9 +128,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "primary_calendar_events",
         [],
     )
-    primary_state = {
-        "calendar_events": raw_primary_calendar_events
-    } if isinstance(raw_primary_calendar_events, list) else {}
+    raw_primary_route_state = stored_clients_data.get(
+        "primary_route_state",
+        {},
+    )
+    primary_state = {}
+    if isinstance(raw_primary_calendar_events, list):
+        primary_state["calendar_events"] = raw_primary_calendar_events
+    if isinstance(raw_primary_route_state, dict):
+        primary_state.update(raw_primary_route_state)
 
     clients: dict[str, ATHLTHClientRuntime] = {
         primary_client_id: ATHLTHClientRuntime(
@@ -191,9 +198,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "calendar_events",
                 [],
             )
-            additional_state = {
-                "calendar_events": raw_calendar_events
-            } if isinstance(raw_calendar_events, list) else {}
+            raw_route_state = raw_client.get(
+                "route_state",
+                {},
+            )
+            additional_state = {}
+            if isinstance(raw_calendar_events, list):
+                additional_state["calendar_events"] = raw_calendar_events
+            if isinstance(raw_route_state, dict):
+                additional_state.update(raw_route_state)
 
             clients[client_id] = ATHLTHClientRuntime(
                 client_id=client_id,
