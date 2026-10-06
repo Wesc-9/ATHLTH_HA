@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 from http import HTTPStatus
@@ -29,9 +30,11 @@ from .const import (
     MAX_DELIVERY_ID_LENGTH,
     MAX_NONCE_LENGTH,
     MAX_PAYLOAD_BYTES,
+    MAX_ROUTE_MAP_PAYLOAD_BYTES,
     NONCE_TTL_SECONDS,
     LIVE_STATE_KEYS,
     RESTORABLE_STATE_KEYS,
+    ROUTE_MAP_STATE_KEYS,
     SIGNATURE_PREFIX,
     SUPPORTED_EVENTS,
     USER_EVENT_TYPES,
@@ -56,7 +59,10 @@ async def async_handle_webhook(
         return _error("unknown_webhook", HTTPStatus.NOT_FOUND)
 
     content_length = request.content_length
-    if content_length is not None and content_length > MAX_PAYLOAD_BYTES:
+    if (
+        content_length is not None
+        and content_length > MAX_ROUTE_MAP_PAYLOAD_BYTES
+    ):
         return _error("payload_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
 
     client_id = request.headers.get(HEADER_CLIENT_ID)
@@ -88,7 +94,7 @@ async def async_handle_webhook(
         return _error("replayed_request", HTTPStatus.CONFLICT)
 
     raw_body = await request.read()
-    if len(raw_body) > MAX_PAYLOAD_BYTES:
+    if len(raw_body) > MAX_ROUTE_MAP_PAYLOAD_BYTES:
         return _error("payload_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
 
     if not _signature_is_valid(
@@ -104,6 +110,13 @@ async def async_handle_webhook(
         message = json.loads(raw_body or b"{}")
     except (json.JSONDecodeError, UnicodeDecodeError):
         return _error("invalid_json", HTTPStatus.BAD_REQUEST)
+
+    if (
+        isinstance(message, dict)
+        and message.get("event") != "workout_route_map"
+        and len(raw_body) > MAX_PAYLOAD_BYTES
+    ):
+        return _error("payload_too_large", HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
 
     validation_error = _validate_message(message)
     if validation_error is not None:
@@ -128,6 +141,7 @@ async def async_handle_webhook(
                 "duplicate": True,
                 "server_time": now,
                 "commands": client.pending_commands,
+                "capabilities": sorted(SUPPORTED_EVENTS),
             },
             headers={"Cache-Control": "no-store"},
         )
@@ -143,8 +157,10 @@ async def async_handle_webhook(
     public_payload = {
         key: value
         for key, value in payload.items()
-        if key != "delivery_id"
+        if key not in {"delivery_id", "map_image_base64"}
     }
+    if event_type == "workout_route_map" and "map_image_base64" in payload:
+        public_payload["map_available"] = True
 
     # The event bus is intentionally local to the user's Home Assistant.
     # Secrets, webhook identifiers and internal delivery IDs are not exposed.
@@ -173,9 +189,12 @@ async def async_handle_webhook(
         await _remember_delivery(runtime, client, delivery_id, now)
 
     if (
-        event_type == "sync_snapshot"
-        and isinstance(payload.get("state"), dict)
-        and "calendar_events" in payload["state"]
+        (
+            event_type == "sync_snapshot"
+            and isinstance(payload.get("state"), dict)
+            and "calendar_events" in payload["state"]
+        )
+        or event_type == "workout_route_map"
     ):
         await runtime.async_save_clients()
 
@@ -189,6 +208,7 @@ async def async_handle_webhook(
             "duplicate": False,
             "server_time": now,
             "commands": client.pending_commands,
+            "capabilities": sorted(SUPPORTED_EVENTS),
         },
         headers={"Cache-Control": "no-store"},
     )
@@ -263,7 +283,11 @@ def _validate_message(message: object) -> str | None:
     if not isinstance(payload, dict):
         return "invalid_payload"
 
-    if not _payload_has_safe_shape(payload):
+    if event_type == "workout_route_map":
+        route_error = _validate_workout_route_map(payload)
+        if route_error is not None:
+            return route_error
+    elif not _payload_has_safe_shape(payload):
         return "invalid_payload"
 
     delivery_id = payload.get("delivery_id")
@@ -331,6 +355,101 @@ def _validate_message(message: object) -> str | None:
             )
         ):
             return "invalid_command_ack"
+
+    return None
+
+
+def _validate_workout_route_map(payload: dict[str, Any]) -> str | None:
+    """Validate the larger completed-route payload without weakening other events."""
+    if payload.get("clear") is True:
+        return None
+
+    allowed = {
+        "name",
+        "type",
+        "started_at",
+        "ended_at",
+        "duration_seconds",
+        "distance_meters",
+        "device",
+        "route_points",
+        "route_point_count",
+        "elevation_gain_meters",
+        "average_pace_seconds_per_km",
+        "active_energy_kcal",
+        "average_heart_rate_bpm",
+        "max_heart_rate_bpm",
+        "route_match_percent",
+        "map_mime_type",
+        "map_image_base64",
+    }
+    if not set(payload).issubset(allowed):
+        return "invalid_workout_route_map"
+
+    route_points = payload.get("route_points")
+    if (
+        not isinstance(route_points, list)
+        or not 2 <= len(route_points) <= 64
+    ):
+        return "invalid_route_points"
+
+    for point in route_points:
+        if (
+            not isinstance(point, list)
+            or len(point) != 2
+            or not _number_in_range(point[0], -90, 90)
+            or not _number_in_range(point[1], -180, 180)
+        ):
+            return "invalid_route_points"
+
+    ranges = {
+        "duration_seconds": (0, 604800),
+        "distance_meters": (0, 5_000_000),
+        "route_point_count": (2, 100_000),
+        "elevation_gain_meters": (0, 100_000),
+        "average_pace_seconds_per_km": (0, 7200),
+        "active_energy_kcal": (0, 100_000),
+        "average_heart_rate_bpm": (20, 260),
+        "max_heart_rate_bpm": (20, 260),
+        "route_match_percent": (0, 100),
+    }
+    for key, (minimum, maximum) in ranges.items():
+        if key in payload and not _number_in_range(
+            payload.get(key), minimum, maximum
+        ):
+            return f"invalid_{key}"
+
+    for key in ("name", "type", "started_at", "ended_at", "device"):
+        value = payload.get(key)
+        if value is not None and (
+            not isinstance(value, str)
+            or not value
+            or len(value) > _MAX_TEXT_LENGTH
+        ):
+            return f"invalid_{key}"
+
+    image = payload.get("map_image_base64")
+    mime_type = payload.get("map_mime_type")
+    if image is None:
+        if mime_type is not None:
+            return "invalid_map_image"
+        return None
+
+    if (
+        mime_type != "image/jpeg"
+        or not isinstance(image, str)
+        or not image
+        or len(image) > 320_000
+    ):
+        return "invalid_map_image"
+
+    try:
+        decoded = base64.b64decode(image, validate=True)
+    except (ValueError, TypeError):
+        return "invalid_map_image"
+
+    if not decoded or len(decoded) > 240_000:
+        return "invalid_map_image"
 
     return None
 
@@ -646,6 +765,37 @@ def _apply_event(
         ):
             client.state.pop(key, None)
         _clear_live_state(client)
+
+    elif event_type == "workout_route_map":
+        if payload.get("clear") is True:
+            for key in ROUTE_MAP_STATE_KEYS:
+                client.state.pop(key, None)
+        else:
+            mapping = {
+                "map_image_base64": "last_workout_route_map_base64",
+                "map_mime_type": "last_workout_route_map_mime_type",
+                "route_points": "last_workout_route_points",
+                "route_point_count": "last_workout_route_point_count",
+                "elevation_gain_meters": "last_workout_elevation_gain_meters",
+                "average_pace_seconds_per_km":
+                    "last_workout_average_pace_seconds_per_km",
+                "active_energy_kcal": "last_workout_active_energy_kcal",
+                "average_heart_rate_bpm":
+                    "last_workout_average_heart_rate_bpm",
+                "max_heart_rate_bpm": "last_workout_max_heart_rate_bpm",
+                "route_match_percent": "last_workout_route_match_percent",
+                "started_at": "last_workout_route_started_at",
+                "ended_at": "last_workout_route_ended_at",
+                "distance_meters": "last_workout_route_distance_meters",
+                "duration_seconds": "last_workout_route_duration_seconds",
+                "device": "last_workout_route_device",
+                "name": "last_workout_route_name",
+                "type": "last_workout_route_type",
+            }
+            for source, target in mapping.items():
+                value = payload.get(source)
+                if value is not None:
+                    client.state[target] = value
 
     elif event_type == "recovery_updated":
         client.state["recovery_score"] = payload["score"]
