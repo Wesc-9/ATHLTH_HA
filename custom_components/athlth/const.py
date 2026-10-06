@@ -28,6 +28,7 @@ NONCE_TTL_SECONDS = 600
 DELIVERY_ID_TTL_SECONDS = 7 * 24 * 60 * 60
 MAX_DELIVERY_ID_LENGTH = 64
 MAX_PAYLOAD_BYTES = 64 * 1024
+MAX_ROUTE_MAP_PAYLOAD_BYTES = 384 * 1024
 MAX_NONCE_LENGTH = 128
 
 SUPPORTED_PROTOCOL_VERSION = 1
@@ -51,6 +52,7 @@ SUPPORTED_EVENTS = frozenset(
         "workout_updated",
         "workout_phase_updated",
         "workout_finished",
+        "workout_route_map",
         "workout_cancelled",
         "strength_set_updated",
         "strength_set_completed",
@@ -65,6 +67,28 @@ SUPPORTED_EVENTS = frozenset(
         "sync_snapshot",
         "command_ack",
         "unpair",
+    }
+)
+
+ROUTE_MAP_STATE_KEYS = frozenset(
+    {
+        "last_workout_route_map_base64",
+        "last_workout_route_map_mime_type",
+        "last_workout_route_points",
+        "last_workout_route_point_count",
+        "last_workout_elevation_gain_meters",
+        "last_workout_average_pace_seconds_per_km",
+        "last_workout_active_energy_kcal",
+        "last_workout_average_heart_rate_bpm",
+        "last_workout_max_heart_rate_bpm",
+        "last_workout_route_match_percent",
+        "last_workout_route_started_at",
+        "last_workout_route_ended_at",
+        "last_workout_route_distance_meters",
+        "last_workout_route_duration_seconds",
+        "last_workout_route_device",
+        "last_workout_route_name",
+        "last_workout_route_type",
     }
 )
 
@@ -144,6 +168,7 @@ USER_EVENT_TYPES = (
     "workout_updated",
     "workout_phase_updated",
     "workout_finished",
+    "workout_route_map",
     "workout_cancelled",
     "strength_set_updated",
     "strength_set_completed",
