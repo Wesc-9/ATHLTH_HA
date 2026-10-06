@@ -757,6 +757,21 @@ def _apply_event(
                 now,
             )
             client.state["last_workout_device"] = payload.get("device")
+            client.state["last_workout_average_pace_seconds_per_km"] = payload.get(
+                "average_pace_seconds_per_km"
+            )
+            client.state["last_workout_active_energy_kcal"] = payload.get(
+                "active_energy_kcal"
+            )
+            client.state["last_workout_average_heart_rate_bpm"] = payload.get(
+                "average_heart_rate_bpm"
+            )
+            client.state["last_workout_max_heart_rate_bpm"] = payload.get(
+                "max_heart_rate_bpm"
+            )
+            client.state["last_workout_route_match_percent"] = payload.get(
+                "route_match_percent"
+            )
         for key in (
             "active_workout",
             "active_workout_type",
