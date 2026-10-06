@@ -11,6 +11,8 @@ import uuid
 
 from homeassistant.helpers.storage import Store
 
+from .const import ROUTE_MAP_STATE_KEYS
+
 
 @dataclass(slots=True)
 class ATHLTHClientRuntime:
@@ -217,6 +219,11 @@ class ATHLTHRuntimeData:
                 "calendar_events",
                 [],
             ),
+            "primary_route_state": {
+                key: self.primary_client.state[key]
+                for key in ROUTE_MAP_STATE_KEYS
+                if key in self.primary_client.state
+            },
             "clients": {
                 client_id: {
                     "name": client.name,
@@ -227,6 +234,11 @@ class ATHLTHRuntimeData:
                         "calendar_events",
                         [],
                     ),
+                    "route_state": {
+                        key: client.state[key]
+                        for key in ROUTE_MAP_STATE_KEYS
+                        if key in client.state
+                    },
                 }
                 for client_id, client in self.clients.items()
                 if not client.is_primary
