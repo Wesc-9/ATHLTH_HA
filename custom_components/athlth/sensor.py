@@ -380,6 +380,35 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     "device": self._client.state.get(
                         "last_workout_device"
                     ),
+                    "average_pace_seconds_per_km": self._client.state.get(
+                        "last_workout_average_pace_seconds_per_km"
+                    ),
+                    "active_energy_kcal": self._client.state.get(
+                        "last_workout_active_energy_kcal"
+                    ),
+                    "average_heart_rate_bpm": self._client.state.get(
+                        "last_workout_average_heart_rate_bpm"
+                    ),
+                    "max_heart_rate_bpm": self._client.state.get(
+                        "last_workout_max_heart_rate_bpm"
+                    ),
+                    "route_match_percent": self._client.state.get(
+                        "last_workout_route_match_percent"
+                    ),
+                    "elevation_gain_meters": self._client.state.get(
+                        "last_workout_elevation_gain_meters"
+                    ),
+                    "route_point_count": self._client.state.get(
+                        "last_workout_route_point_count"
+                    ),
+                    "route_map_available": bool(
+                        self._client.state.get(
+                            "last_workout_route_map_base64"
+                        )
+                    ),
+                    "route_points": self._client.state.get(
+                        "last_workout_route_points"
+                    ),
                 }
             )
 
