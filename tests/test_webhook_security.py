@@ -297,3 +297,30 @@ def test_achievement_and_record_events_are_documented():
         assert _validate_message(
             {"event": event, "payload": {"title": "Example"}}
         ) is None
+
+
+# CGNAT addresses are not considered private by ipaddress. Only the
+# explicitly scoped Tailscale-style space is added to code pairing.
+from types import SimpleNamespace
+
+from custom_components.athlth.api import _request_is_local
+
+
+def test_pairing_accepts_tailscale_address_space():
+    assert _request_is_local(SimpleNamespace(remote=".".join(("100", "102", "120", "20"))))
+    assert _request_is_local(SimpleNamespace(remote="100.64.0.1"))
+    assert _request_is_local(SimpleNamespace(remote="100.127.255.254"))
+
+
+def test_pairing_rejects_public_and_outside_shared_range():
+    assert not _request_is_local(SimpleNamespace(remote="100.63.255.255"))
+    assert not _request_is_local(SimpleNamespace(remote="100.128.0.1"))
+    assert not _request_is_local(SimpleNamespace(remote="8.8.8.8"))
+    assert not _request_is_local(SimpleNamespace(remote="invalid"))
+    assert not _request_is_local(SimpleNamespace(remote=None))
+
+
+def test_pairing_keeps_regular_private_address_support():
+    assert _request_is_local(SimpleNamespace(remote=".".join(("192", "168", "1", "100"))))
+    assert _request_is_local(SimpleNamespace(remote=".".join(("10", "0", "0", "3"))))
+    assert _request_is_local(SimpleNamespace(remote="127.0.0.1"))

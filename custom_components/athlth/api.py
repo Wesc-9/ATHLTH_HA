@@ -32,6 +32,10 @@ from .runtime import ATHLTHClientRuntime, ATHLTHRuntimeData
 
 _CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{8,96}$")
 _PAIRING_CODE_PATTERN = re.compile(r"^\d{6}$")
+# Tailscale uses shared-address-space IPv4, which is not is_private.
+# Membership here permits only the same short-lived, rate-limited code exchange.
+# It does NOT prove that a request came from an authenticated tailnet.
+_TAILSCALE_ADDRESS_SPACE = ipaddress.ip_network("100.64.0.0/10")
 
 
 class ATHLTHPairView(HomeAssistantView):
@@ -123,6 +127,10 @@ def _request_is_local(request: web.Request) -> bool:
         address.is_private
         or address.is_loopback
         or address.is_link_local
+        or (
+            isinstance(address, ipaddress.IPv4Address)
+            and address in _TAILSCALE_ADDRESS_SPACE
+        )
     )
 
 
