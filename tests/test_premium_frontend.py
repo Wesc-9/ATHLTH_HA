@@ -30,13 +30,13 @@ def test_documented_dashboard_and_frontend_are_registered():
 
 
 
-def test_manifest_uses_official_health_wellbeing_category():
-    """HA Marketplace labels describe the integration instead of its entities."""
+def test_manifest_keeps_compatibility_with_supported_hassfest():
+    """The categories field is not accepted by our supported 2026.9 action."""
     import json
     manifest = json.loads(
         (ROOT / "custom_components" / "athlth" / "manifest.json").read_text()
     )
-    assert manifest["categories"] == ["health_wellbeing"]
+    assert "categories" not in manifest
 
 
 async def test_frontend_static_resource_registration_is_idempotent(monkeypatch):
