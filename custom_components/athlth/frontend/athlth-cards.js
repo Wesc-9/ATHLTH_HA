@@ -348,6 +348,88 @@
     }
     customElements.define("athlth-card-editor",ATHLTHEditor);
   }
+
+  // Visual editor for choosing paired ATHLTH installations. Data stays local.
+  class ATHLTHConfigEditor extends HTMLElement {
+    constructor(){
+      super();
+      this._root=this.attachShadow({mode:"open"});
+      this._config={};
+      this._hass=null;
+      this._root.addEventListener("change",(event)=>{
+        const target=event.target;
+        if(!target||!target.dataset)return;
+        const key=target.dataset.key;
+        const idx=Number(target.dataset.index);
+        if(key==="entity"){
+          this._config={...this._config,entity:target.value};
+        }else if((key==="name"||key==="member-entity")&&Number.isInteger(idx)){
+          const members=this._members();
+          if(!members[idx])return;
+          if(key==="name")members[idx].name=target.value.slice(0,64);
+          else members[idx].entity=target.value;
+          this._config={...this._config,members};
+        }else return;
+        this._send();
+      });
+      this._root.addEventListener("click",(event)=>{
+        const button=event.target&&event.target.closest&&event.target.closest("[data-action]");
+        if(!button)return;
+        const action=button.dataset.action;
+        const members=this._members();
+        if(action==="add"&&members.length<12){
+          const anchors=this._anchors();
+          members.push({name:"Person "+(members.length+1),entity:anchors[0]||"sensor.athlth_last_workout"});
+        }else if(action==="remove"&&members.length>1){
+          const i=Number(button.dataset.index);
+          if(!Number.isInteger(i)||i<0||i>=members.length)return;
+          members.splice(i,1);
+        }else return;
+        this._config={...this._config,members};
+        this._send();
+      });
+    }
+    setConfig(config){this._config={...config};this.render();}
+    set hass(hass){this._hass=hass;this.render();}
+    _anchors(){
+      const states=this._hass&&this._hass.states||{};
+      const ids=Object.keys(states).filter(x=>/^sensor\.[a-z0-9_]+_last_workout$/.test(x)).sort();
+      const extra=[];
+      if(this._config.entity)extra.push(this._config.entity);
+      if(Array.isArray(this._config.members))for(const m of this._config.members)if(m&&m.entity)extra.push(m.entity);
+      return [...new Set([...ids,...extra])];
+    }
+    _members(){
+      const raw=Array.isArray(this._config.members)&&this._config.members.length?this._config.members:[{name:this._config.name||"Min trening",entity:this._config.entity||"sensor.athlth_last_workout"}];
+      return raw.filter(m=>m&&typeof m==="object").map(m=>({...m})).slice(0,12);
+    }
+    _select(entity,index,key){
+      const choices=this._anchors();
+      if(!choices.includes(entity))choices.unshift(entity);
+      const options=choices.map(id=>'<option value="'+esc(id)+'"'+(id===entity?' selected':"")+'>'+esc(id)+'</option>').join("");
+      return '<select data-key="'+key+'"'+(index===null?"":' data-index="'+index+'"')+' aria-label="ATHLTH-sensor">'+options+'</select>';
+    }
+    _send(){
+      this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:{...this._config}},bubbles:true,composed:true}));
+      this.render();
+    }
+    render(){
+      if(!this._root||!this._config.type)return;
+      const type=this._config.type;
+      const isMulti=type==="custom:athlth-dashboard-card"||type==="custom:athlth-family-card";
+      const css='<style>:host{display:block;color:var(--primary-text-color);font-family:inherit}.editor{display:grid;gap:12px;padding:16px;border:1px solid var(--divider-color,#ddd);border-radius:16px}.intro{font-weight:750;font-size:14px}.hint{color:var(--secondary-text-color);font-size:11px;line-height:1.5}.entry{display:grid;gap:6px;padding:12px;border-radius:12px;background:var(--secondary-background-color,#f5f4f2)}label{font-size:12px;font-weight:600}select,input{padding:11px;min-width:0;max-width:100%;width:100%;box-sizing:border-box;border-radius:10px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff);color:var(--primary-text-color);font:inherit;font-size:12px}button{background:transparent;border:1px solid var(--divider-color,#ddd);color:var(--primary-text-color);border-radius:10px;padding:10px 14px;cursor:pointer;font-weight:650}.add{border-color:#c7955f;color:#c7955f}.line{display:flex;align-items:center;justify-content:space-between;gap:8px}</style>';
+      let body='';
+      if(isMulti){
+        const members=this._members();
+        body=members.map((m,i)=>'<div class="entry"><div class="line"><label>Familiemedlem '+(i+1)+'</label>'+(members.length>1?'<button type="button" data-action="remove" data-index="'+i+'">Fjern</button>':"")+'</div><input type="text" maxlength="64" data-key="name" data-index="'+i+'" value="'+esc(m.name||"")+'" aria-label="Visningsnavn">'+this._select(m.entity||"sensor.athlth_last_workout",i,"member-entity")+'</div>').join("")+(members.length<12?'<button class="add" type="button" data-action="add">+ Legg til familiemedlem</button>':"");
+      }else{
+        body='<label>Velg ATHLTH-enhet</label>'+this._select(this._config.entity||"sensor.athlth_last_workout",null,"entity");
+      }
+      this._root.innerHTML=css+'<div class="editor"><div class="intro">ATHLTH · Kortinnstillinger</div><div class="hint">Velg den ekte «Siste treningsøkt»-sensoren for hver tilkoblet ATHLTH-app. Hvert familiemedlem styrer datadeling i sin egen app.</div>'+body+'</div>';
+    }
+  }
+  if(!customElements.get("athlth-config-editor"))customElements.define("athlth-config-editor",ATHLTHConfigEditor);
+
   for(const kind of Object.keys(DESCRIPTIONS)){
     if(customElements.get(kind)) continue;
     class ATHLTHCard extends HTMLElement {
@@ -366,6 +448,7 @@
       set hass(hass){this._hass=hass;this.render();}
       getCardSize(){return kind==="athlth-dashboard-card"?12:kind==="athlth-family-card"?5:3;}
       static getStubConfig(){return {type:"custom:"+kind};}
+      static getConfigElement(){return document.createElement("athlth-config-editor");}
       static getConfigElement(){return document.createElement("athlth-card-editor");}
       connectedCallback(){
         this._root.addEventListener("click",(event)=>{
