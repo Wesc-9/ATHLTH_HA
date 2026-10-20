@@ -50,7 +50,7 @@ const second={
 };
 
 test("all premium ATHLTH cards register once",()=>{
-  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history"];
+  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status"];
   for(const name of names)assert.ok(registry.has("athlth-"+name+"-card"),name);
   assert.equal(window.customCards.length,names.length);
 });
@@ -255,4 +255,46 @@ test("treadmill workout shows pace without a GPS map",()=>{
   assert.match(html,/6:00/);
   assert.match(html,/Løping innendørs/);
   assert.doesNotMatch(html,/\/api\/camera_proxy\//);
+});
+
+
+test("online, training, offline, private and unknown statuses render separately",()=>{
+  const states={
+    ...first,
+    "sensor.athlth_presence":state("online")
+  };
+  const member={entity:"sensor.athlth_last_workout",name:"Person A"};
+  const cardOnline=card("athlth-status-card",{members:[member]},{states});
+  assert.match(cardOnline,/Online/);
+  assert.match(cardOnline,/status-online/);
+
+  states["sensor.athlth_presence"]=state("training");
+  const cardTraining=card("athlth-family-card",{members:[member]},{states});
+  assert.match(cardTraining,/Trener nå/);
+  assert.match(cardTraining,/status-training/);
+
+  states["sensor.athlth_presence"]=state("offline");
+  assert.match(card("athlth-status-card",{members:[member]},{states}),/>Offline</);
+
+  states["sensor.athlth_presence"]=state("not_shared");
+  assert.match(card("athlth-status-card",{members:[member]},{states}),/Ikke delt/);
+
+  delete states["sensor.athlth_presence"];
+  assert.match(card("athlth-status-card",{members:[member]},{states}),/Ukjent/);
+});
+
+test("separate family installation states show green and amber without leakage",()=>{
+  const states={...first,
+    "sensor.athlth_presence":state("online"),
+    "sensor.partner_last_workout":state("Workout"),
+    "sensor.partner_presence":state("training")
+  };
+  const html=card("athlth-family-card",{members:[
+    {name:"Athlete A",entity:"sensor.athlth_last_workout"},
+    {name:"Athlete B",entity:"sensor.partner_last_workout"}
+  ]},{states});
+  assert.match(html,/Athlete A/);
+  assert.match(html,/Athlete B/);
+  assert.match(html,/status-online/);
+  assert.match(html,/status-training/);
 });

@@ -253,3 +253,22 @@ the user opts into training-calendar sharing, the integration accepts a
 start time) plus optional per-calendar-entry `status` (planned/completed/
 skipped) and `plan_id`. Older app versions remain compatible and show
 only scheduled sessions. No plan data is sent when calendar sharing is off.
+
+### Online and currently training statuses
+
+ATHLTH status is now exposed as a **per-paired-installation**
+`sensor.*_presence`: `online`, `training`, `offline`,
+`not_shared` or `unknown`. The **Status** modular card and the family
+and dashboard cards show a green Online indicator, warm gold **Trener nå**
+indicator, or neutral offline/unknown/private indicators. The associated
+iPhone app must enable **Online-status** in Home Assistant sharing (off
+by default). "Online" means *this iPhone app is foregrounded and recently
+synced*, not social-network presence. Training reflects an actually reported
+active workout, including an Apple Watch session with the phone backgrounded.
+
+Statuses automatically expire after 4 minutes without a signed update,
+showing **Ukjent** rather than a false "Online" or "Trener nå". Foreground
+updates are ephemeral and never queued for later replay. Pairing/"Connected"
+alone cannot make someone appear online. Users may disable online sharing
+independently of workout sharing. The Home Assistant app's authorization
+and its broader privacy model still govern access to a shared dashboard.

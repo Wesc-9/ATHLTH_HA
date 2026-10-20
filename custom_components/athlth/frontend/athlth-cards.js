@@ -21,9 +21,11 @@
     "athlth-calendar-card": ["ATHLTH Ukeplan", "Planlagte økter fra ATHLTH-kalenderen."],
     "athlth-goals-card": ["ATHLTH Mål", "Personlige treningsmål og fremdrift."],
     "athlth-strength-card": ["ATHLTH Styrke", "Pågående styrkeøvelse, sett og repetisjoner."],
-    "athlth-history-card": ["ATHLTH Mottatte økter", "Inntil ti fullførte økter mottatt etter oppkobling."]
+    "athlth-history-card": ["ATHLTH Mottatte økter", "Inntil ti fullførte økter mottatt etter oppkobling."],
+    "athlth-status-card": ["ATHLTH Status", "Online, trener nå eller offline for en ATHLTH-bruker."]
   };
   const SUFFIX = {
+    presence: "presence",
     weekly_progress: "weekly_progress",
     weekly_workout_count: "weekly_workout_count",
     weekly_training_minutes: "weekly_training_minutes",
@@ -120,6 +122,33 @@
     const d=new Date(time);
     if(!Number.isFinite(d.getTime())) return "";
     return '<div class="sync">Sist synkronisert '+esc(d.toLocaleString("nb-NO",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))+'</div>';
+  }
+
+  const STATUS = Object.freeze({
+    training:{label:"Trener nå",className:"training",hint:"En aktiv treningsøkt er nylig rapportert."},
+    online:{label:"Online",className:"online",hint:"ATHLTH er åpen og nylig synkronisert."},
+    offline:{label:"Offline",className:"offline",hint:"ATHLTH er ikke åpen på telefonen."},
+    unknown:{label:"Ukjent",className:"unknown",hint:"Ingen fersk status. Vises ikke som online."},
+    not_shared:{label:"Ikke delt",className:"private",hint:"Online-deling er av eller status er ikke tilgjengelig."}
+  });
+  function presence(hass,member){
+    const s=entity(hass,member,"presence");
+    const raw=String(valueOf(s)||"unknown");
+    return STATUS[raw]?raw:"unknown";
+  }
+  function statusPill(hass,member){
+    const state=presence(hass,member);
+    const def=STATUS[state];
+    return '<span class="status-pill status-'+def.className+'" title="'+esc(def.hint)+'" aria-label="ATHLTH-status: '+esc(def.label)+'"><i class="status-dot" aria-hidden="true"></i>'+esc(def.label)+'</span>';
+  }
+  function statusCard(hass,member){
+    const state=presence(hass,member);
+    const label=member&&member.name?member.name:"Min status";
+    const desc=STATUS[state].hint;
+    const active=entity(hass,member,"workout_active");
+    const session=active&&active.attributes&&active.attributes.active_workout;
+    const name=state==="training"&&session?'<div class="muted">'+esc(session)+'</div>':"";
+    return card("Min status",'<div class="status-feature"><div class="avatar avatar-status status-'+esc(state)+'" aria-hidden="true">A</div><div class="status-name"><div class="activity-name">'+esc(label)+'</div><div class="muted">'+esc(desc)+'</div>'+name+'</div>'+statusPill(hass,member)+'</div>'+lastSync(hass,member));
   }
   function weeklyPlanStats(hass,member){
     const state=entity(hass,member,"training_schedule");
@@ -336,14 +365,14 @@
       const p=plan?plan.percent:num(entity(hass,m,"weekly_progress"));
       const count=num(entity(hass,m,"weekly_workout_count"));
       const nextName=valueOf(entity(hass,m,"next_workout"));
-      return '<div class="family-row"><div class="avatar" aria-hidden="true">◉</div><div class="family-main"><strong>'+esc(m.name||"ATHLTH-bruker")+'</strong><div class="muted">'+(count===null?"Ingen ukedata":fmt(count)+" økter denne uken")+'</div>'+(nextName?'<div class="muted">Neste: '+esc(nextName)+'</div>':"")+(p===null?"":bar(p))+'</div><div class="family-percent">'+(p===null?"—":fmt(p)+"%")+'</div></div>';
+      return '<div class="family-row"><div class="avatar avatar-status status-'+presence(hass,m)+'" aria-hidden="true">A</div><div class="family-main"><div class="family-identity"><strong>'+esc(m.name||"ATHLTH-bruker")+'</strong>'+statusPill(hass,m)+'</div><div class="muted">'+(count===null?"Ingen ukedata":fmt(count)+" økter denne uken")+'</div>'+(nextName?'<div class="muted">Neste: '+esc(nextName)+'</div>':"")+(p===null?"":bar(p))+'</div><div class="family-percent">'+(p===null?"—":fmt(p)+"%")+'</div></div>';
     }).join("");
     return card("Familiens trening",items||empty("Ingen familiemedlemmer valgt."));
   }
   function dashboard(hass,members,selected) {
     const member=members[selected]||members[0];
     const chooser=members.length>1?'<div class="member-tabs" role="group" aria-label="Velg familiemedlem">'+members.map((m,i)=>'<button type="button" data-athlth-member="'+i+'" class="'+(i===selected?"selected":"")+'">'+esc(m.name||"Medlem "+(i+1))+'</button>').join("")+'</div>':"";
-    return '<div class="dashboard"><div class="dashboard-head">'+logo()+'<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+chooser+'<div class="dashboard-grid"><div class="wide">'+week(hass,member)+'</div><div>'+today(hass,member)+'</div><div>'+next(hass,member)+'</div><div class="wide">'+last(hass,member)+'</div><div>'+plan(hass,member)+'</div><div>'+recovery(hass,member)+'</div><div class="wide">'+calendar(hass,member)+'</div><div class="wide">'+history(hass,member)+'</div>'+(members.length>1?'<div class="wide">'+family(hass,members)+'</div>':"")+'<div class="wide">'+active(hass,member)+'</div></div></div>';
+    return '<div class="dashboard"><div class="dashboard-head"><div class="dashboard-brand">'+logo()+'<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+statusPill(hass,member)+'</div>'+chooser+'<div class="dashboard-grid"><div class="wide">'+statusCard(hass,member)+'</div><div class="wide">'+week(hass,member)+'</div><div>'+today(hass,member)+'</div><div>'+next(hass,member)+'</div><div class="wide">'+last(hass,member)+'</div><div>'+plan(hass,member)+'</div><div>'+recovery(hass,member)+'</div><div class="wide">'+calendar(hass,member)+'</div><div class="wide">'+history(hass,member)+'</div>'+(members.length>1?'<div class="wide">'+family(hass,members)+'</div>':"")+'<div class="wide">'+active(hass,member)+'</div></div></div>';
   }
   function today(hass,member){
     const schedule=entity(hass,member,"training_schedule");
@@ -379,7 +408,9 @@
     '.calendar-item.status-completed{background:color-mix(in srgb,#558878 15%,transparent);color:var(--ath-text)}.calendar-item.status-skipped{opacity:.54;text-decoration:line-through}',
     '.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.calendar-day{border:1px solid var(--divider-color,#eee);border-radius:12px;padding:8px 5px;min-width:0;min-height:70px}.calendar-day.today{border-color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 10%,transparent)}.calendar-date{font-size:10px;color:var(--ath-muted);margin-bottom:5px}.calendar-item{font-size:10px;background:color-mix(in srgb,var(--ath-gold) 14%,transparent);border-radius:6px;padding:4px;overflow-wrap:anywhere;margin-top:4px}.calendar-off{font-size:12px;color:var(--ath-muted)}',
     '.live{display:flex;align-items:center;gap:7px;color:var(--ath-gold);font-size:11px;font-weight:800;letter-spacing:1px;margin-bottom:12px}.live-dot{width:8px;height:8px;border-radius:50%;background:var(--ath-gold)}',
-    '.dashboard{display:block}.dashboard-head{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-bottom:20px;padding:0 4px}.dashboard-head .brand{font-size:20px;letter-spacing:4px;gap:7px}.dashboard-head .brandmark{height:44px;width:44px}.subbrand{font-size:9px;letter-spacing:2px;color:var(--ath-muted);font-weight:700;padding-left:51px}',
+    '.status-pill{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:750;white-space:nowrap;border-radius:100px;padding:6px 10px;border:1px solid var(--divider-color,#ddd);background:var(--secondary-background-color,#f3f3f3);color:var(--ath-muted)}.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#969699;flex-shrink:0}.status-pill.status-online{background:color-mix(in srgb,#317960 11%,var(--card-background-color,#fff));border-color:color-mix(in srgb,#317960 28%,transparent);color:#317960}.status-online .status-dot{background:#317960}.status-pill.status-training{background:color-mix(in srgb,var(--ath-gold) 14%,var(--card-background-color,#fff));border-color:color-mix(in srgb,var(--ath-gold) 38%,transparent);color:#9d713d}.status-training .status-dot{background:var(--ath-gold)}.status-pill.status-offline{opacity:.78}.status-pill.status-unknown{opacity:.7}.status-feature{display:flex;gap:14px;align-items:center}.status-name{flex:1;min-width:0}.avatar-status{position:relative;background:color-mix(in srgb,var(--ath-gold) 9%,var(--secondary-background-color,#eee));font-size:13px;font-weight:800;color:var(--ath-text);border:2px solid var(--divider-color,#ddd)}.avatar-status.status-training{border-color:var(--ath-gold)}.avatar-status.status-online{border-color:#317960}.avatar-status.status-offline{border-color:#9c9ca3}.family-identity{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.family-identity .status-pill{padding:3px 7px;font-size:10px}.family-identity .status-dot{width:6px;height:6px}',
+    '.dashboard{display:block}.dashboard-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;padding:0 4px;flex-wrap:wrap}.dashboard-head .brand{font-size:20px;letter-spacing:4px;gap:7px}.dashboard-head .brandmark{height:44px;width:44px}.subbrand{font-size:9px;letter-spacing:2px;color:var(--ath-muted);font-weight:700;padding-left:51px}',
+    '.dashboard-brand{display:flex;flex-direction:column;align-items:flex-start;gap:3px}',
     '.dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.dashboard-grid>.wide{grid-column:span 2}.dashboard-grid>div{min-width:0}.dashboard-grid ha-card{height:100%}',
     '.member-tabs{display:flex;gap:7px;overflow-x:auto;margin:0 0 18px;padding:3px 0 8px}.member-tabs button{border:1px solid var(--divider-color,#ddd);border-radius:100px;background:var(--card-background-color,#fff);color:var(--ath-text);font:600 12px inherit;padding:9px 17px;cursor:pointer;white-space:nowrap}.member-tabs button.selected{border-color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 13%,var(--card-background-color,#fff))}',
     '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.dashboard-grid{grid-template-columns:minmax(0,1fr)}.dashboard-grid>.wide{grid-column:span 1}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
@@ -518,6 +549,7 @@
           "athlth-goals-card":()=>goals(this._hass,member),
           "athlth-strength-card":()=>strength(this._hass,member),
           "athlth-history-card":()=>history(this._hass,member),
+          "athlth-status-card":()=>statusCard(this._hass,member),
           "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected)
         };
         this._root.innerHTML="<style>"+CSS+"</style>"+builders[kind]();
