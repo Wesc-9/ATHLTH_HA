@@ -114,7 +114,7 @@ test("show only bounded received workout history, with no invention",()=>{
   const states={...first,"sensor.athlth_recent_workouts":state("1",{workouts:records})};
   const html=card("athlth-history-card",{}, {states});
   assert.match(html,/4x4 Intervals/);
-  assert.match(html,/6,5 km/);
+  assert.match(html,/6,50 km/);
   assert.match(html,/Ikke hele treningshistorikken|Ingen eldre økter/);
   assert.doesNotMatch(html,/<img src/);
 });
