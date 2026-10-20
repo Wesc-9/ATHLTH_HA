@@ -181,3 +181,49 @@ test("week calendar distinguishes completed and skipped from planned sessions",(
   assert.match(html,/status-completed/);
   assert.match(html,/status-skipped/);
 });
+
+
+test("real Home Assistant metric suffixes feed week, recovery and strength cards",()=>{
+  const states={...first,
+    "sensor.athlth_weekly_distance_km":state("12.7"),
+    "sensor.athlth_sleep_duration_minutes":state("450"),
+    "sensor.athlth_hrv_milliseconds":state("68"),
+    "binary_sensor.athlth_workout_active":state("on"),
+    "sensor.athlth_current_exercise":state("Squat"),
+    "sensor.athlth_current_set":state("2"),
+    "sensor.athlth_current_set_total":state("4"),
+    "sensor.athlth_current_weight_kg":state("82.5"),
+    "sensor.athlth_current_reps":state("8"),
+    "sensor.athlth_current_rest_seconds":state("90")
+  };
+  assert.match(card("athlth-week-card",{}, {states}),/12,7/);
+  const recovery=card("athlth-recovery-card",{}, {states});
+  assert.match(recovery,/7,5/);
+  assert.match(recovery,/68/);
+  const strength=card("athlth-strength-card",{}, {states});
+  assert.match(strength,/Squat/);
+  assert.match(strength,/82,5/);
+  assert.match(strength,/90 sekunder/);
+});
+
+test("planned completion is not inflated by extra workouts",()=>{
+  const d=new Date().toISOString();
+  const states={...first,"sensor.athlth_weekly_progress":state("100"),
+    "sensor.athlth_weekly_workout_count":state("4"),
+    "sensor.athlth_training_schedule":state("3",{events:[
+      {id:"one",title:"Run",start:d,status:"completed"},
+      {id:"two",title:"Strength",start:d,status:"planned"},
+      {id:"three",title:"Skipped",start:d,status:"skipped"}
+    ]})};
+  const html=card("athlth-week-card",{}, {states});
+  assert.match(html,/50%/);
+  assert.match(html,/1 av 2 planlagte økter fullført/);
+  assert.match(html,/Økter totalt/);
+});
+
+test("missing completed-workout metrics display dash instead of fake zero",()=>{
+  const states={...first,"sensor.athlth_last_workout":state("Walk",{type:"walking",distance_meters:null,duration_seconds:null,average_heart_rate_bpm:null})};
+  const html=card("athlth-last-card",{}, {states});
+  assert.doesNotMatch(html,/0,00 km/);
+  assert.doesNotMatch(html,/0 bpm/);
+});

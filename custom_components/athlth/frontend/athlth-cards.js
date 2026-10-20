@@ -27,7 +27,7 @@
     weekly_progress: "weekly_progress",
     weekly_workout_count: "weekly_workout_count",
     weekly_training_minutes: "weekly_training_minutes",
-    weekly_distance: "weekly_distance",
+    weekly_distance: "weekly_distance_km",
     next_workout: "next_workout",
     training_schedule: "training_schedule",
     training_plan: "training_plan",
@@ -36,14 +36,14 @@
     recent_workouts: "recent_workouts",
     recovery_score: "recovery_score",
     recovery_state: "recovery_state",
-    sleep_duration: "sleep_duration",
-    hrv: "hrv",
+    sleep_duration: "sleep_duration_minutes",
+    hrv: "hrv_milliseconds",
     resting_heart_rate: "resting_heart_rate",
     workout_active: "workout_active",
     workout_phase: "workout_phase",
-    active_workout_elapsed_seconds: "workout_elapsed",
-    active_workout_distance_meters: "workout_distance",
-    active_workout_heart_rate_bpm: "workout_heart_rate",
+    active_workout_elapsed_seconds: "active_workout_elapsed_seconds",
+    active_workout_distance_meters: "active_workout_distance_meters",
+    active_workout_heart_rate_bpm: "active_workout_heart_rate_bpm",
     last_workout_route: "last_workout_route",
     last_sync: "last_sync",
     active_goal: "active_goal",
@@ -52,8 +52,8 @@
     current_set: "current_set",
     current_set_total: "current_set_total",
     current_reps: "current_reps",
-    current_weight_kg: "current_weight",
-    current_rest_seconds: "rest_remaining",
+    current_weight_kg: "current_weight_kg",
+    current_rest_seconds: "current_rest_seconds",
     goal_progress: "goal_progress",
     training_streak: "training_streak"
   };
@@ -121,15 +121,38 @@
     if(!Number.isFinite(d.getTime())) return "";
     return '<div class="sync">Sist synkronisert '+esc(d.toLocaleString("nb-NO",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))+'</div>';
   }
-  function week(hass,member) {
-    const percentage=num(entity(hass,member,"weekly_progress"));
+  function weeklyPlanStats(hass,member){
+    const state=entity(hass,member,"training_schedule");
+    const entries=state&&state.attributes&&state.attributes.events;
+    if(!Array.isArray(entries))return null;
+    const now=new Date(),monday=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
+    const end=new Date(monday);end.setDate(end.getDate()+7);
+    const seen=new Set();
+    const filtered=entries.filter(e=>{
+      if(!e||!e.start||!["planned","completed","skipped"].includes(e.status))return false;
+      const date=asDate(e.start);
+      if(!Number.isFinite(date.getTime())||date<monday||date>=end)return false;
+      const key=String(e.plan_id||"standalone")+":"+String(e.id||e.start+"-"+e.title);
+      if(seen.has(key))return false;
+      seen.add(key);return true;
+    });
+    const completed=filtered.filter(e=>e.status==="completed").length;
+    const pending=filtered.filter(e=>e.status==="planned").length;
+    const total=completed+pending;
+    return total>0?{completed,total,percent:100*completed/total}:null;
+  }
+  function week(hass,member){
+    const plan=weeklyPlanStats(hass,member);
+    const percentage=plan?plan.percent:num(entity(hass,member,"weekly_progress"));
     const count=num(entity(hass,member,"weekly_workout_count"));
     const minutes=num(entity(hass,member,"weekly_training_minutes"));
     const km=num(entity(hass,member,"weekly_distance"));
-    if([percentage,count,minutes,km].every(v=>v===null)) return card("Treningsuken",empty("Koble til ATHLTH og aktiver deling av ukesfremdrift."));
-    const pct=percentage===null ? 0 : Math.min(100,Math.max(0,percentage));
-    const top='<div class="week-feature"><div><div class="eyebrow">DIN TRENINGSUKE</div><div class="huge">'+(percentage===null?"—":fmt(pct)+"%")+'</div><p class="muted">Fullført av planlagt trening</p></div><div class="ring" style="--pct:'+String(pct)+'"><span>'+ (percentage===null?"—":fmt(pct)+"%") +'</span></div></div>';
-    const stats='<div class="stats cols-3">'+statistic("Økter",fmt(count),"")+statistic("Treningstid",fmt(minutes),"min")+statistic("Distanse",fmt(km,1),"km")+'</div>';
+    if([percentage,count,minutes,km].every(v=>v===null))return card("Treningsuken",empty("Koble til ATHLTH og aktiver deling av ukesfremdrift."));
+    const pct=percentage===null?0:Math.min(100,Math.max(0,percentage));
+    const detail=plan?fmt(plan.completed)+" av "+fmt(plan.total)+" planlagte økter fullført":"Fremdrift rapportert fra ATHLTH";
+    const top='<div class="week-feature"><div><div class="eyebrow">DIN TRENINGSUKE</div><div class="huge">'+(percentage===null?"—":fmt(pct)+"%")+'</div><p class="muted">'+esc(detail)+'</p></div><div class="ring" style="--pct:'+String(pct)+'"><span>'+(percentage===null?"—":fmt(pct)+"%")+'</span></div></div>';
+    const stats='<div class="stats cols-3">'+statistic("Økter totalt",fmt(count),"")+statistic("Treningstid",fmt(minutes),"min")+statistic("Distanse",fmt(km,1),"km")+'</div>';
     return card("Treningsuken",top+(percentage===null?"":bar(pct))+stats+lastSync(hass,member));
   }
   function next(hass,member,todayOnly=false) {
@@ -155,9 +178,9 @@
     const routeEnd=route && route.attributes && route.attributes.ended_at;
     const hasMatch = route && usable(route) && a.ended_at && routeEnd && Math.abs(asDate(a.ended_at).getTime()-asDate(routeEnd).getTime())<180000;
     const image=outdoor && hasMatch ? '<div class="map"><img loading="lazy" alt="Kart over siste utendørs treningsøkt" src="/api/camera_proxy/'+encodeURIComponent(route.entity_id)+'"></div>' : "";
-    const distance=Number.isFinite(Number(a.distance_meters))?fmt(Number(a.distance_meters)/1000,2)+" km":"—";
-    const seconds=Number.isFinite(Number(a.duration_seconds))?duration(Number(a.duration_seconds)):"—";
-    const heart=Number.isFinite(Number(a.average_heart_rate_bpm))?fmt(Number(a.average_heart_rate_bpm))+" bpm":"—";
+    const distance=a.distance_meters!=null&&Number.isFinite(Number(a.distance_meters))?fmt(Number(a.distance_meters)/1000,2)+" km":"—";
+    const seconds=a.duration_seconds!=null&&Number.isFinite(Number(a.duration_seconds))?duration(Number(a.duration_seconds)):"—";
+    const heart=a.average_heart_rate_bpm!=null&&Number.isFinite(Number(a.average_heart_rate_bpm))?fmt(Number(a.average_heart_rate_bpm))+" bpm":"—";
     const source=a.device ? '<span class="chip">'+esc(String(a.device))+'</span>':"";
     return card("Siste økt",image+'<div class="activity-hero"><span class="glyph">'+(type.includes("strength")?"✦":type.includes("treadmill")?"▤":"↗")+'</span><div><div class="activity-name">'+esc(name)+'</div><div class="muted">'+(niceDate(a.ended_at)?esc(niceDate(a.ended_at)):"Fullført økt")+'</div></div></div><div class="stats cols-3">'+statistic("Distanse",distance,"")+statistic("Tid",seconds,"")+statistic("Snittpuls",heart,"")+'</div>'+source+lastSync(hass,member));
   }
@@ -280,7 +303,8 @@
   }
   function family(hass,members) {
     const items=members.map((m)=>{
-      const p=num(entity(hass,m,"weekly_progress"));
+      const plan=weeklyPlanStats(hass,m);
+      const p=plan?plan.percent:num(entity(hass,m,"weekly_progress"));
       const count=num(entity(hass,m,"weekly_workout_count"));
       const nextName=valueOf(entity(hass,m,"next_workout"));
       return '<div class="family-row"><div class="avatar" aria-hidden="true">◉</div><div class="family-main"><strong>'+esc(m.name||"ATHLTH-bruker")+'</strong><div class="muted">'+(count===null?"Ingen ukedata":fmt(count)+" økter denne uken")+'</div>'+(nextName?'<div class="muted">Neste: '+esc(nextName)+'</div>':"")+(p===null?"":bar(p))+'</div><div class="family-percent">'+(p===null?"—":fmt(p)+"%")+'</div></div>';
