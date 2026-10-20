@@ -141,6 +141,9 @@
     const def=STATUS[state];
     return '<span class="status-pill status-'+def.className+'" title="'+esc(def.hint)+'" aria-label="ATHLTH-status: '+esc(def.label)+'"><i class="status-dot" aria-hidden="true"></i>'+esc(def.label)+'</span>';
   }
+  function memberInitial(name){
+    return esc(String(name||"A").trim().charAt(0).toLocaleUpperCase("nb-NO")||"A");
+  }
   function statusCard(hass,member){
     const state=presence(hass,member);
     const label=member&&member.name?member.name:"Min status";
@@ -148,7 +151,7 @@
     const active=entity(hass,member,"workout_active");
     const session=active&&active.attributes&&active.attributes.active_workout;
     const name=state==="training"&&session?'<div class="muted">'+esc(session)+'</div>':"";
-    return card("Min status",'<div class="status-feature"><div class="avatar avatar-status status-'+esc(state)+'" aria-hidden="true">A</div><div class="status-name"><div class="activity-name">'+esc(label)+'</div><div class="muted">'+esc(desc)+'</div>'+name+'</div>'+statusPill(hass,member)+'</div>'+lastSync(hass,member));
+    return card("Min status",'<div class="status-feature"><div class="avatar avatar-status status-'+esc(state)+'" aria-hidden="true">'+memberInitial(label)+'</div><div class="status-name"><div class="activity-name">'+esc(label)+'</div><div class="muted">'+esc(desc)+'</div>'+name+'</div>'+statusPill(hass,member)+'</div>'+lastSync(hass,member));
   }
   function weeklyPlanStats(hass,member){
     const state=entity(hass,member,"training_schedule");
@@ -319,6 +322,7 @@
     const status=entity(hass,member,"workout_active");
     const exercise=valueOf(entity(hass,member,"current_exercise"));
     if(!status||status.state!=="on"||!exercise) return card("Styrke",empty("Ingen aktiv styrkeøkt med delte settdetaljer."));
+    if(!liveFresh(hass,member)) return card("Styrke",empty("Styrkeøkten kan ikke bekreftes. Venter på ny oppdatering.")+lastSync(hass,member));
     const set=num(entity(hass,member,"current_set"));
     const total=num(entity(hass,member,"current_set_total"));
     const repetitions=num(entity(hass,member,"current_reps"));
@@ -357,7 +361,7 @@
     if(!last) return false;
     const timestamp=asDate(last).getTime();
     const elapsed=Date.now()-timestamp;
-    return Number.isFinite(elapsed)&&elapsed>=-60000&&elapsed<=600000;
+    return Number.isFinite(elapsed)&&elapsed>=-60000&&elapsed<=240000;
   }
   function family(hass,members) {
     const items=members.map((m)=>{
@@ -365,7 +369,7 @@
       const p=plan?plan.percent:num(entity(hass,m,"weekly_progress"));
       const count=num(entity(hass,m,"weekly_workout_count"));
       const nextName=valueOf(entity(hass,m,"next_workout"));
-      return '<div class="family-row"><div class="avatar avatar-status status-'+presence(hass,m)+'" aria-hidden="true">A</div><div class="family-main"><div class="family-identity"><strong>'+esc(m.name||"ATHLTH-bruker")+'</strong>'+statusPill(hass,m)+'</div><div class="muted">'+(count===null?"Ingen ukedata":fmt(count)+" økter denne uken")+'</div>'+(nextName?'<div class="muted">Neste: '+esc(nextName)+'</div>':"")+(p===null?"":bar(p))+'</div><div class="family-percent">'+(p===null?"—":fmt(p)+"%")+'</div></div>';
+      return '<div class="family-row"><div class="avatar avatar-status status-'+presence(hass,m)+'" aria-hidden="true">'+memberInitial(m.name)+'</div><div class="family-main"><div class="family-identity"><strong>'+esc(m.name||"ATHLTH-bruker")+'</strong>'+statusPill(hass,m)+'</div><div class="muted">'+(count===null?"Ingen ukedata":fmt(count)+" økter denne uken")+'</div>'+(nextName?'<div class="muted">Neste: '+esc(nextName)+'</div>':"")+(p===null?"":bar(p))+'</div><div class="family-percent">'+(p===null?"—":fmt(p)+"%")+'</div></div>';
     }).join("");
     return card("Familiens trening",items||empty("Ingen familiemedlemmer valgt."));
   }

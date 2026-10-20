@@ -96,6 +96,7 @@ test("strength card shows stale-free empty state when no workout is active",()=>
   const states={...first,"sensor.athlth_current_exercise":state("Squat")};
   assert.match(card("athlth-strength-card",{}, {states}),/Ingen aktiv styrkeøkt/);
   states["binary_sensor.athlth_workout_active"]=state("on");
+  states["sensor.athlth_last_sync"]=state(new Date().toISOString());
   states["sensor.athlth_current_set"]=state("3");
   states["sensor.athlth_current_reps"]=state("8");
   assert.match(card("athlth-strength-card",{}, {states}),/Squat/);
@@ -196,6 +197,7 @@ test("real Home Assistant metric suffixes feed week, recovery and strength cards
     "sensor.athlth_current_reps":state("8"),
     "sensor.athlth_current_rest_seconds":state("90")
   };
+  states["sensor.athlth_last_sync"]=state(new Date().toISOString());
   assert.match(card("athlth-week-card",{}, {states}),/12,7/);
   const recovery=card("athlth-recovery-card",{}, {states});
   assert.match(recovery,/7,5/);
@@ -297,4 +299,21 @@ test("separate family installation states show green and amber without leakage",
   assert.match(html,/Athlete B/);
   assert.match(html,/status-online/);
   assert.match(html,/status-training/);
+});
+
+
+test("stale strength data is never shown as a live recording",()=>{
+  const states={...first,
+    "binary_sensor.athlth_workout_active":state("on"),
+    "sensor.athlth_current_exercise":state("Deadlift"),
+    "sensor.athlth_last_sync":state("2026-09-01T00:00:00Z")};
+  const html=card("athlth-strength-card",{}, {states});
+  assert.match(html,/kan ikke bekreftes/);
+  assert.doesNotMatch(html,/PÅGÅENDE/);
+});
+
+test("status avatar uses the actual person initial",()=>{
+  const states={...first,"sensor.athlth_presence":state("online")};
+  const html=card("athlth-status-card",{name:"Siri"},{states});
+  assert.match(html,/aria-hidden="true">S<\/div>/);
 });
