@@ -17,7 +17,8 @@
     "athlth-plan-card": ["ATHLTH Treningsplan", "Planoversikt basert på delte ATHLTH-data."],
     "athlth-family-card": ["ATHLTH Familie", "Frivillig sammenligning av ukens treningsaktivitet."],
     "athlth-recovery-card": ["ATHLTH Restitusjon", "Dagsform og valgfritt delte helseverdier."],
-    "athlth-active-card": ["ATHLTH Live", "Status fra pågående treningsøkt."]
+    "athlth-active-card": ["ATHLTH Live", "Status fra pågående treningsøkt."],
+    "athlth-calendar-card": ["ATHLTH Ukeplan", "Planlagte økter fra ATHLTH-kalenderen."]
   };
   const SUFFIX = {
     weekly_progress: "weekly_progress",
@@ -177,6 +178,23 @@
     const name=s.attributes && (s.attributes.active_workout || s.attributes.workout_name || s.attributes.name || s.attributes.workout);
     return card("Live trening",'<div class="live"><span class="live-dot"></span> AKTIV ØKT</div><div class="activity-name">'+esc(name||"Treningsøkt")+'</div>'+(phase?'<div class="muted">Fase: '+esc(phase)+'</div>':"")+'<div class="stats cols-3">'+statistic("Varighet",duration(secs),"")+statistic("Distanse",dist===null?"—":fmt(dist/1000,2),"km")+statistic("Puls",fmt(bpm),"bpm")+'</div>'+lastSync(hass,member));
   }
+  function calendar(hass,member) {
+    const state=entity(hass,member,"training_schedule");
+    const raw=state&&state.attributes&&state.attributes.events;
+    const events=Array.isArray(raw)?raw.filter(e=>e&&e.start&&e.title&&Number.isFinite(asDate(e.start).getTime())).sort((a,b)=>asDate(a.start)-asDate(b.start)):[];
+    if(!events.length) return card("Ukeplan",empty("Ingen planlagte økter er delt fra ATHLTH-kalenderen."));
+    const now=new Date();
+    const monday=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
+    const names=["Man","Tir","Ons","Tor","Fre","Lør","Søn"];
+    const cells=names.map((name,i)=>{
+      const day=new Date(monday);day.setDate(day.getDate()+i);
+      const tomorrow=new Date(day);tomorrow.setDate(tomorrow.getDate()+1);
+      const sessions=events.filter(e=>asDate(e.start)>=day&&asDate(e.start)<tomorrow);
+      return '<div class="calendar-day '+(day.toDateString()===now.toDateString()?"today":"")+'"><div class="calendar-date">'+name+' '+day.getDate()+'</div>'+(sessions.length?sessions.map(e=>'<div class="calendar-item">'+esc(e.title)+'</div>').join(""):'<span class="calendar-off">—</span>')+'</div>';
+    }).join("");
+    return card("Ukeplan",'<div class="calendar-grid">'+cells+'</div><p class="note">Planlagte økter – ikke bekreftet gjennomføring.</p>');
+  }
   function family(hass,members) {
     const items=members.map((m)=>{
       const p=num(entity(hass,m,"weekly_progress"));
@@ -189,7 +207,7 @@
   function dashboard(hass,members,selected) {
     const member=members[selected]||members[0];
     const chooser=members.length>1?'<div class="member-tabs" role="group" aria-label="Velg familiemedlem">'+members.map((m,i)=>'<button type="button" data-athlth-member="'+i+'" class="'+(i===selected?"selected":"")+'">'+esc(m.name||"Medlem "+(i+1))+'</button>').join("")+'</div>':"";
-    return '<div class="dashboard"><div class="dashboard-head">'+logo()+'<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+chooser+'<div class="dashboard-grid"><div class="wide">'+week(hass,member)+'</div><div>'+today(hass,member)+'</div><div>'+next(hass,member)+'</div><div class="wide">'+last(hass,member)+'</div><div>'+plan(hass,member)+'</div><div>'+recovery(hass,member)+'</div>'+(members.length>1?'<div class="wide">'+family(hass,members)+'</div>':"")+'<div class="wide">'+active(hass,member)+'</div></div></div>';
+    return '<div class="dashboard"><div class="dashboard-head">'+logo()+'<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+chooser+'<div class="dashboard-grid"><div class="wide">'+week(hass,member)+'</div><div>'+today(hass,member)+'</div><div>'+next(hass,member)+'</div><div class="wide">'+last(hass,member)+'</div><div>'+plan(hass,member)+'</div><div>'+recovery(hass,member)+'</div><div class="wide">'+calendar(hass,member)+'</div>'+(members.length>1?'<div class="wide">'+family(hass,members)+'</div>':"")+'<div class="wide">'+active(hass,member)+'</div></div></div>';
   }
   function today(hass,member){
     const schedule=entity(hass,member,"training_schedule");
@@ -218,11 +236,12 @@
     '.plan-row{display:flex;flex-direction:column;gap:5px;margin-top:18px;padding-top:15px;border-top:1px solid var(--divider-color,#ddd)}.plan-row span{font-size:11px;color:var(--ath-muted)}.plan-row strong{font-size:15px}',
     '.empty{display:flex;align-items:center;gap:10px;color:var(--ath-muted);font-size:12px;min-height:56px;line-height:1.5}.empty-dot{width:9px;height:9px;background:var(--ath-gold);opacity:.8;border-radius:50%;flex-shrink:0}',
     '.recovery{display:flex;justify-content:space-between;align-items:end;gap:12px}.family-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0}.family-row+.family-row{border-top:1px solid var(--divider-color,#eee)}.avatar{background:color-mix(in srgb,var(--ath-gold) 15%,transparent);border-radius:50%;height:40px;width:40px;display:grid;place-items:center;color:var(--ath-gold)}.family-main{flex:1;min-width:0}.family-main strong{font-size:14px}.family-main .progress{margin:8px 0 0}.family-percent{font-size:13px;font-weight:700;color:var(--ath-gold)}',
+    '.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.calendar-day{border:1px solid var(--divider-color,#eee);border-radius:12px;padding:8px 5px;min-width:0;min-height:70px}.calendar-day.today{border-color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 10%,transparent)}.calendar-date{font-size:10px;color:var(--ath-muted);margin-bottom:5px}.calendar-item{font-size:10px;background:color-mix(in srgb,var(--ath-gold) 14%,transparent);border-radius:6px;padding:4px;overflow-wrap:anywhere;margin-top:4px}.calendar-off{font-size:12px;color:var(--ath-muted)}',
     '.live{display:flex;align-items:center;gap:7px;color:var(--ath-gold);font-size:11px;font-weight:800;letter-spacing:1px;margin-bottom:12px}.live-dot{width:8px;height:8px;border-radius:50%;background:var(--ath-gold)}',
     '.dashboard{display:block}.dashboard-head{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-bottom:20px;padding:0 4px}.dashboard-head .brand{font-size:20px;letter-spacing:4px;gap:7px}.dashboard-head .brandmark{height:44px;width:44px}.subbrand{font-size:9px;letter-spacing:2px;color:var(--ath-muted);font-weight:700;padding-left:51px}',
     '.dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.dashboard-grid>.wide{grid-column:span 2}.dashboard-grid>div{min-width:0}.dashboard-grid ha-card{height:100%}',
     '.member-tabs{display:flex;gap:7px;overflow-x:auto;margin:0 0 18px;padding:3px 0 8px}.member-tabs button{border:1px solid var(--divider-color,#ddd);border-radius:100px;background:var(--card-background-color,#fff);color:var(--ath-text);font:600 12px inherit;padding:9px 17px;cursor:pointer;white-space:nowrap}.member-tabs button.selected{border-color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 13%,var(--card-background-color,#fff))}',
-    '@media(max-width:600px){.dashboard-grid{grid-template-columns:minmax(0,1fr)}.dashboard-grid>.wide{grid-column:span 1}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
+    '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.dashboard-grid{grid-template-columns:minmax(0,1fr)}.dashboard-grid>.wide{grid-column:span 1}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
   ].join("");
 
 
@@ -339,6 +358,7 @@
           "athlth-family-card":()=>family(this._hass,members),
           "athlth-recovery-card":()=>recovery(this._hass,member),
           "athlth-active-card":()=>active(this._hass,member),
+          "athlth-calendar-card":()=>calendar(this._hass,member),
           "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected)
         };
         this._root.innerHTML="<style>"+CSS+"</style>"+builders[kind]();
