@@ -62,6 +62,11 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         icon="mdi:calendar-week",
     ),
     SensorEntityDescription(
+        key="training_plan",
+        name="Active training plan",
+        icon="mdi:calendar-text",
+    ),
+    SensorEntityDescription(
         key="next_workout",
         name="Next workout",
         icon="mdi:calendar-clock",
@@ -364,6 +369,10 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
             records = self._client.state.get("recent_workouts")
             return len(records) if isinstance(records, list) else None
 
+        if key == "training_plan":
+            plan = self._client.state.get("training_plan")
+            return plan.get("title") if isinstance(plan, dict) else None
+
         value = self._client.state.get(key)
 
         if (
@@ -449,13 +458,23 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     if isinstance(record, dict)
                 ]
 
+        if self.entity_description.key == "training_plan":
+            plan = self._client.state.get("training_plan")
+            if isinstance(plan, dict):
+                attributes.update({
+                    "id": plan.get("id"),
+                    "current_week": plan.get("current_week"),
+                    "total_weeks": plan.get("total_weeks"),
+                    "starts_at": plan.get("starts_at"),
+                })
+
         if self.entity_description.key == "training_schedule":
             events = self._client.state.get("calendar_events")
             if isinstance(events, list):
                 attributes["events"] = [
                     {
                         key: item[key]
-                        for key in ("id", "title", "start", "end", "type")
+                        for key in ("id", "title", "start", "end", "type", "status", "plan_id")
                         if key in item
                     }
                     for item in events[:16]

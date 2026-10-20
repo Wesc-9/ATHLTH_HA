@@ -141,6 +141,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ]
     if isinstance(raw_primary_calendar_events, list):
         primary_state["calendar_events"] = raw_primary_calendar_events
+    saved_primary_plan = stored_clients_data.get("primary_training_plan")
+    if isinstance(saved_primary_plan, dict):
+        primary_state["training_plan"] = saved_primary_plan
     if isinstance(raw_primary_route_state, dict):
         primary_state.update(raw_primary_route_state)
 
@@ -216,6 +219,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 ]
             if isinstance(raw_calendar_events, list):
                 additional_state["calendar_events"] = raw_calendar_events
+            saved_plan = raw_client.get("training_plan")
+            if isinstance(saved_plan, dict):
+                additional_state["training_plan"] = saved_plan
             if isinstance(raw_route_state, dict):
                 additional_state.update(raw_route_state)
 

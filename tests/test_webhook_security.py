@@ -394,3 +394,52 @@ def test_recent_completed_workout_is_bounded_deduplicated_and_no_gps():
 
     _apply_event(client, "sync_snapshot", {"state": {"last_workout": None}}, 1200)
     assert "recent_workouts" not in client.state
+
+
+
+def test_training_plan_snapshot_is_validated_and_isolated():
+    """Plan metadata has a strict shape and cannot smuggle extra fields."""
+    from custom_components.athlth.webhook import _validate_message
+
+    valid = {
+        "id": "plan-123",
+        "title": "8-week intervals",
+        "current_week": 3,
+        "total_weeks": 8,
+        "starts_at": "2026-10-01T00:00:00Z",
+    }
+    assert _validate_message({
+        "event": "sync_snapshot", "payload": {"state": {
+            "training_plan": valid,
+            "calendar_events": [{
+                "id": "session-1", "title": "4x4",
+                "start": "2026-10-20T18:00:00Z",
+                "end": "2026-10-20T19:00:00Z",
+                "type": "running", "status": "completed",
+                "plan_id": "plan-123",
+            }],
+        }}
+    }) is None
+    assert _validate_message({
+        "event": "sync_snapshot",
+        "payload": {"state": {"training_plan": {
+            **valid, "shared_secret": "should-not-be-here",
+        }}},
+    }) == "invalid_training_plan"
+    assert _validate_message({
+        "event": "sync_snapshot",
+        "payload": {"state": {"training_plan": {
+            **valid, "current_week": 99,
+        }}},
+    }) == "invalid_training_plan"
+    assert _validate_message({
+        "event": "sync_snapshot",
+        "payload": {"state": {"training_plan": None}},
+    }) is None
+    assert _validate_message({
+        "event": "sync_snapshot",
+        "payload": {"state": {"calendar_events": [{
+            "id": "x", "title": "Run", "start": "2026-10-20T18:00:00Z",
+            "end": "2026-10-20T19:00:00Z", "status": "lying",
+        }]}},
+    }) == "invalid_calendar_events"

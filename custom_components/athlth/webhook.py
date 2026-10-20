@@ -194,6 +194,7 @@ async def async_handle_webhook(
             and isinstance(payload.get("state"), dict)
             and (
                 "calendar_events" in payload["state"]
+                or "training_plan" in payload["state"]
                 or (
                     "last_workout" in payload["state"]
                     and payload["state"]["last_workout"] is None
@@ -528,6 +529,36 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
     }:
         return "invalid_recovery_state"
 
+
+    training_plan = state.get("training_plan")
+    if training_plan is not None:
+        if (
+            not isinstance(training_plan, dict)
+            or not set(training_plan).issubset(
+                {"id", "title", "current_week", "total_weeks", "starts_at"}
+            )
+            or not all(
+                isinstance(training_plan.get(field), str)
+                and 0 < len(training_plan[field]) <= 96
+                for field in ("id", "title")
+            )
+            or not all(
+                isinstance(training_plan.get(field), int)
+                and not isinstance(training_plan[field], bool)
+                and 0 <= training_plan[field] <= 520
+                for field in ("current_week", "total_weeks")
+            )
+            or training_plan["total_weeks"] < 1
+            or training_plan["current_week"] > training_plan["total_weeks"]
+        ):
+            return "invalid_training_plan"
+        starts_at = training_plan.get("starts_at")
+        if starts_at is not None and (
+            not isinstance(starts_at, str)
+            or not (1 <= len(starts_at) <= 64)
+        ):
+            return "invalid_training_plan"
+
     calendar_events = state.get("calendar_events")
     if calendar_events is not None:
         if not isinstance(calendar_events, list) or len(calendar_events) > 64:
@@ -537,12 +568,21 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
             if not isinstance(event, dict):
                 return "invalid_calendar_events"
             if not set(event).issubset(
-                {"id", "title", "start", "end", "type"}
+                {"id", "title", "start", "end", "type", "status", "plan_id"}
             ):
                 return "invalid_calendar_events"
             if not all(
                 isinstance(event.get(key), str) and event.get(key)
                 for key in ("id", "title", "start", "end")
+            ):
+                return "invalid_calendar_events"
+            if "status" in event and event["status"] not in {
+                "planned", "completed", "skipped"
+            }:
+                return "invalid_calendar_events"
+            if "plan_id" in event and (
+                not isinstance(event["plan_id"], str)
+                or not 1 <= len(event["plan_id"]) <= 96
             ):
                 return "invalid_calendar_events"
 

@@ -122,6 +122,7 @@ RESTORABLE_STATE_KEYS = frozenset(
         "recovery_score",
         "training_load",
         "weekly_progress",
+        "training_plan",
         "next_workout",
         "next_workout_time",
         "sleep_duration_minutes",

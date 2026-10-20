@@ -160,6 +160,9 @@ class ATHLTHTrainingCalendar(CalendarEntity):
                 if isinstance(workout_type, str) and workout_type
                 else "ATHLTH planned workout"
             )
+            status = raw.get("status")
+            if status in {"completed", "skipped"}:
+                description += f" · {status}"
 
             events.append(
                 CalendarEvent(

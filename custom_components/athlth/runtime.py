@@ -220,6 +220,7 @@ class ATHLTHRuntimeData:
                 "calendar_events",
                 [],
             ),
+            "primary_training_plan": self.primary_client.state.get("training_plan"),
             "primary_route_state": {
                 key: self.primary_client.state[key]
                 for key in ROUTE_MAP_STATE_KEYS
@@ -236,6 +237,7 @@ class ATHLTHRuntimeData:
                         "calendar_events",
                         [],
                     ),
+                    "training_plan": client.state.get("training_plan"),
                     "route_state": {
                         key: client.state[key]
                         for key in ROUTE_MAP_STATE_KEYS
