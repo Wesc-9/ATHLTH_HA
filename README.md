@@ -294,3 +294,12 @@ fresh page. If a card is unavailable on the first load, check **Settings →
 Dashboards → Resources** and add the same URL as **JavaScript module**
 (only if not already registered), then refresh. Do not add duplicate
 resource entries. For YAML-managed Lovelace, put the resource in YAML instead.
+
+**Workout-active sensor safety:** `binary_sensor.*_workout_active` becomes
+`unavailable` if the last authenticated message is older than four minutes
+(or no explicit recording state has been received). This prevents a previous
+true value restored after a HA restart from remaining indefinitely active.
+It must not be treated as false/off when unavailable. Conversely,
+`binary_sensor.*_connected` indicates a valid pairing credential, not
+that the athlete is online. Use `sensor.*_presence` for privacy-aware
+`online`, `training`, `offline`, `unknown`, and `not_shared`.

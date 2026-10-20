@@ -26,6 +26,7 @@ from .const import (
     signal_update,
 )
 from .runtime import ATHLTHClientRuntime, ATHLTHRuntimeData
+from .presence import PRESENCE_FRESH_SECONDS, CLOCK_TOLERANCE_SECONDS
 
 
 async def async_setup_entry(
@@ -114,9 +115,26 @@ class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
         )
 
     @property
+    def available(self) -> bool:
+        """Do not expose a stale recording as a current true/false signal.
+
+        In particular, an on value restored after a restart is *unknown*
+        until a fresh authenticated message arrives.
+        """
+        if (
+            not self._client.shared_secret
+            or self._client.last_seen is None
+            or type(self._client.state.get("workout_active")) is not bool
+        ):
+            return False
+
+        age = time.time() - self._client.last_seen
+        return -CLOCK_TOLERANCE_SECONDS <= age <= PRESENCE_FRESH_SECONDS
+
+    @property
     def is_on(self) -> bool:
-        """Return whether a workout is active."""
-        return bool(self._client.state.get("workout_active", False))
+        """Latest authenticated recording state, only usable when available."""
+        return self._client.state.get("workout_active") is True
 
     @property
     def extra_state_attributes(self):
@@ -155,6 +173,15 @@ class ATHLTHWorkoutActiveBinarySensor(RestoreEntity, BinarySensorEntity):
                 self.hass,
                 signal_update(self._entry_id),
                 self.async_write_ha_state,
+            )
+        )
+        # Refresh availability when the last signed message becomes stale,
+        # even when no further push arrives from an offline phone.
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass,
+                lambda _now: self.async_write_ha_state(),
+                timedelta(minutes=1),
             )
         )
 
