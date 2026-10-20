@@ -1,0 +1,64 @@
+# ATHLTH premium dashboard – entire dashboard in one configurable card.
+# Choose a new dashboard in Home Assistant (manual YAML).
+# There is no demo data: every value comes from the connected ATHLTH devices.
+# Each optional member must consent to sharing in their own ATHLTH app.
+#
+# All card types are bundled with ATHLTH_HA. Supported individual cards:
+# athlth-week-card, athlth-today-card, athlth-next-card,
+# athlth-last-card, athlth-plan-card, athlth-recovery-card,
+# athlth-active-card, athlth-family-card, athlth-dashboard-card.
+#
+# Primary installation uses sensor.athlth_last_workout.
+# For additional accounts/devices, use the exact "Last workout" entity id
+# from Settings > Devices & services > ATHLTH.
+# Optional "entities" overrides let you map specific entity IDs manually.
+
+title: ATHLTH
+views:
+  - title: ATHLTH
+    path: athlth
+    icon: mdi:run-fast
+    cards:
+      - type: custom:athlth-dashboard-card
+        members:
+          - name: Min trening
+            entity: sensor.athlth_last_workout
+
+  - title: Trening
+    path: trening
+    icon: mdi:dumbbell
+    cards:
+      - type: custom:athlth-week-card
+        entity: sensor.athlth_last_workout
+      - type: custom:athlth-today-card
+        entity: sensor.athlth_last_workout
+      - type: custom:athlth-plan-card
+        entity: sensor.athlth_last_workout
+      - type: custom:athlth-last-card
+        entity: sensor.athlth_last_workout
+
+# Example for TWO voluntarily connected users:
+# - type: custom:athlth-dashboard-card
+#   members:
+#     - name: Meg
+#       entity: sensor.athlth_last_workout
+#     - name: Samboer
+#       entity: sensor.<actual_second_installation>_last_workout
+#       # Enter exact IDs from HA; do not guess the extra client's slug.
+#
+# Standalone family card works on an existing dashboard:
+# - type: custom:athlth-family-card
+#   members:
+#     - name: Meg
+#       entity: sensor.athlth_last_workout
+#     - name: Samboer
+#       entity: sensor.<actual_second_installation>_last_workout
+#
+# Override sensor names when a custom entity ID or HA localization differs:
+# - type: custom:athlth-recovery-card
+#   entity: sensor.athlth_last_workout
+#   entities:
+#     recovery_score: sensor.athlth_recovery_score
+#     sleep_duration: sensor.athlth_sleep_duration
+#     hrv: sensor.athlth_hrv
+#     resting_heart_rate: sensor.athlth_resting_heart_rate
