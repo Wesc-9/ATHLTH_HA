@@ -324,3 +324,30 @@ def test_pairing_keeps_regular_private_address_support():
     assert _request_is_local(SimpleNamespace(remote=".".join(("192", "168", "1", "100"))))
     assert _request_is_local(SimpleNamespace(remote=".".join(("10", "0", "0", "3"))))
     assert _request_is_local(SimpleNamespace(remote="127.0.0.1"))
+
+
+def test_revoking_completed_workout_sharing_clears_route_state():
+    """A disabled share must not leave stale GPS images or workout metadata."""
+    from custom_components.athlth.runtime import ATHLTHClientRuntime
+    from custom_components.athlth.webhook import _apply_event
+
+    client = ATHLTHClientRuntime(
+        client_id="primary",
+        name="Primary",
+        shared_secret="placeholder-test-only",
+        is_primary=True,
+        state={
+            "last_workout": "Outdoor run",
+            "last_workout_type": "outdoor_run",
+            "last_workout_distance_meters": 5000,
+            "last_workout_route_points": [[1, 2], [3, 4]],
+            "last_workout_route_map_base64": "not-real-image",
+            "last_workout_route_ended_at": "2026-10-20T10:00:00Z",
+        },
+    )
+    _apply_event(client, "sync_snapshot", {"state": {"last_workout": None}}, 1000)
+    assert client.state["last_workout"] is None
+    assert "last_workout_type" not in client.state
+    assert "last_workout_distance_meters" not in client.state
+    assert "last_workout_route_points" not in client.state
+    assert "last_workout_route_map_base64" not in client.state

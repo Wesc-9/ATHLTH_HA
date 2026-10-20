@@ -373,7 +373,10 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
             "last_event": self._client.state.get("last_event"),
         }
 
-        if self.entity_description.key == "last_workout":
+        if (
+            self.entity_description.key == "last_workout"
+            and self._client.state.get("last_workout") is not None
+        ):
             attributes.update(
                 {
                     "type": self._client.state.get("last_workout_type"),
@@ -415,9 +418,8 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                             "last_workout_route_map_base64"
                         )
                     ),
-                    "route_points": self._client.state.get(
-                        "last_workout_route_points"
-                    ),
+                    # Full GPS polylines are intentionally not exposed as
+                    # ordinary sensor attributes (Recorder / HA history).
                 }
             )
 

@@ -192,7 +192,13 @@ async def async_handle_webhook(
         (
             event_type == "sync_snapshot"
             and isinstance(payload.get("state"), dict)
-            and "calendar_events" in payload["state"]
+            and (
+                "calendar_events" in payload["state"]
+                or (
+                    "last_workout" in payload["state"]
+                    and payload["state"]["last_workout"] is None
+                )
+            )
         )
         or event_type == "workout_route_map"
     ):
@@ -839,3 +845,13 @@ def _apply_event(
             for key, value in snapshot.items():
                 if key in RESTORABLE_STATE_KEYS:
                     client.state[key] = value
+
+            # Revoking completed-workout sharing must also remove the route
+            # image and historical workout attributes from active HA state.
+            # Otherwise a camera entity could keep exposing an old GPS map.
+            if "last_workout" in snapshot and snapshot["last_workout"] is None:
+                for key in tuple(client.state):
+                    if key.startswith("last_workout_"):
+                        client.state.pop(key, None)
+                for key in ROUTE_MAP_STATE_KEYS:
+                    client.state.pop(key, None)
