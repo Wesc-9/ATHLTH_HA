@@ -203,6 +203,9 @@ Each of the following can also be used as a standalone Lovelace custom card:
 | custom:athlth-family-card | Per-installation voluntary family summary |
 | custom:athlth-recovery-card | Shared recovery and health indicators |
 | custom:athlth-active-card | Currently active workout |
+| custom:athlth-calendar-card | Seven-day planned workout calendar |
+| custom:athlth-goals-card | Personal training goal and progress |
+| custom:athlth-strength-card | Live strength sets, reps, weight |
 
 Single-user config: choose type custom:athlth-dashboard-card and optionally
 entity sensor.athlth_last_workout.

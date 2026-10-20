@@ -18,7 +18,9 @@
     "athlth-family-card": ["ATHLTH Familie", "Frivillig sammenligning av ukens treningsaktivitet."],
     "athlth-recovery-card": ["ATHLTH Restitusjon", "Dagsform og valgfritt delte helseverdier."],
     "athlth-active-card": ["ATHLTH Live", "Status fra pågående treningsøkt."],
-    "athlth-calendar-card": ["ATHLTH Ukeplan", "Planlagte økter fra ATHLTH-kalenderen."]
+    "athlth-calendar-card": ["ATHLTH Ukeplan", "Planlagte økter fra ATHLTH-kalenderen."],
+    "athlth-goals-card": ["ATHLTH Mål", "Personlige treningsmål og fremdrift."],
+    "athlth-strength-card": ["ATHLTH Styrke", "Pågående styrkeøvelse, sett og repetisjoner."]
   };
   const SUFFIX = {
     weekly_progress: "weekly_progress",
@@ -42,6 +44,13 @@
     last_workout_route: "last_workout_route",
     last_sync: "last_sync",
     active_goal: "active_goal",
+    goal_days_remaining: "goal_days_remaining",
+    current_exercise: "current_exercise",
+    current_set: "current_set",
+    current_set_total: "current_set_total",
+    current_reps: "current_reps",
+    current_weight_kg: "current_weight",
+    current_rest_seconds: "rest_remaining",
     goal_progress: "goal_progress",
     training_streak: "training_streak"
   };
@@ -194,6 +203,28 @@
       return '<div class="calendar-day '+(day.toDateString()===now.toDateString()?"today":"")+'"><div class="calendar-date">'+name+' '+day.getDate()+'</div>'+(sessions.length?sessions.map(e=>'<div class="calendar-item">'+esc(e.title)+'</div>').join(""):'<span class="calendar-off">—</span>')+'</div>';
     }).join("");
     return card("Ukeplan",'<div class="calendar-grid">'+cells+'</div><p class="note">Planlagte økter – ikke bekreftet gjennomføring.</p>');
+  }
+  function goals(hass,member) {
+    const name=valueOf(entity(hass,member,"active_goal"));
+    const percent=num(entity(hass,member,"goal_progress"));
+    const days=num(entity(hass,member,"goal_days_remaining"));
+    const streak=num(entity(hass,member,"training_streak"));
+    if(!name&&percent===null&&days===null&&streak===null) return card("Mine mål",empty("Ingen treningsmål er delt fra ATHLTH."));
+    const progress=percent===null?"":'<div class="huge">'+fmt(percent)+'%</div>'+bar(Math.min(100,Math.max(0,percent)));
+    const statistics='<div class="stats cols-3">'+statistic("Dager igjen",fmt(days),"")+statistic("Treningsrekke",fmt(streak),"dager")+statistic("Fremdrift",fmt(percent),"%")+'</div>';
+    return card("Mine mål",'<div class="activity-name">'+esc(name||"Personlig mål")+'</div>'+progress+statistics);
+  }
+  function strength(hass,member) {
+    const status=entity(hass,member,"workout_active");
+    const exercise=valueOf(entity(hass,member,"current_exercise"));
+    if(!status||status.state!=="on"||!exercise) return card("Styrke",empty("Ingen aktiv styrkeøkt med delte settdetaljer."));
+    const set=num(entity(hass,member,"current_set"));
+    const total=num(entity(hass,member,"current_set_total"));
+    const repetitions=num(entity(hass,member,"current_reps"));
+    const kg=num(entity(hass,member,"current_weight_kg"));
+    const rest=num(entity(hass,member,"current_rest_seconds"));
+    const setLabel=set===null?"—":fmt(set)+(total===null?"":" / "+fmt(total));
+    return card("Styrke",'<div class="live"><span class="live-dot"></span> '+(rest!==null&&rest>0?"PAUSE":"PÅGÅENDE")+'</div><div class="activity-name">'+esc(exercise)+'</div><div class="stats cols-3">'+statistic("Sett",setLabel,"")+statistic("Reps",fmt(repetitions),"")+statistic("Vekt",fmt(kg,1),"kg")+'</div>'+(rest!==null&&rest>0?'<div class="muted">Pause '+fmt(rest)+' sekunder</div>':"")+lastSync(hass,member));
   }
   function family(hass,members) {
     const items=members.map((m)=>{
@@ -359,6 +390,8 @@
           "athlth-recovery-card":()=>recovery(this._hass,member),
           "athlth-active-card":()=>active(this._hass,member),
           "athlth-calendar-card":()=>calendar(this._hass,member),
+          "athlth-goals-card":()=>goals(this._hass,member),
+          "athlth-strength-card":()=>strength(this._hass,member),
           "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected)
         };
         this._root.innerHTML="<style>"+CSS+"</style>"+builders[kind]();

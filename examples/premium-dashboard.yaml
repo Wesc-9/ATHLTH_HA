@@ -6,7 +6,8 @@
 # All card types are bundled with ATHLTH_HA. Supported individual cards:
 # athlth-week-card, athlth-today-card, athlth-next-card,
 # athlth-last-card, athlth-plan-card, athlth-recovery-card,
-# athlth-active-card, athlth-family-card, athlth-dashboard-card.
+# athlth-active-card, athlth-family-card, athlth-dashboard-card,
+# athlth-calendar-card, athlth-goals-card, athlth-strength-card.
 #
 # Primary installation uses sensor.athlth_last_workout.
 # For additional accounts/devices, use the exact "Last workout" entity id
@@ -35,6 +36,8 @@ views:
       - type: custom:athlth-plan-card
         entity: sensor.athlth_last_workout
       - type: custom:athlth-last-card
+        entity: sensor.athlth_last_workout
+      - type: custom:athlth-calendar-card
         entity: sensor.athlth_last_workout
 
 # Example for TWO voluntarily connected users:
