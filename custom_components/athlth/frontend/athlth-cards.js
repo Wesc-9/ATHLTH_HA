@@ -20,7 +20,8 @@
     "athlth-active-card": ["ATHLTH Live", "Status fra pågående treningsøkt."],
     "athlth-calendar-card": ["ATHLTH Ukeplan", "Planlagte økter fra ATHLTH-kalenderen."],
     "athlth-goals-card": ["ATHLTH Mål", "Personlige treningsmål og fremdrift."],
-    "athlth-strength-card": ["ATHLTH Styrke", "Pågående styrkeøvelse, sett og repetisjoner."]
+    "athlth-strength-card": ["ATHLTH Styrke", "Pågående styrkeøvelse, sett og repetisjoner."],
+    "athlth-history-card": ["ATHLTH Mottatte økter", "Inntil ti fullførte økter mottatt etter oppkobling."]
   };
   const SUFFIX = {
     weekly_progress: "weekly_progress",
@@ -31,6 +32,7 @@
     training_schedule: "training_schedule",
     next_workout_time: "next_workout_time",
     last_workout: "last_workout",
+    recent_workouts: "recent_workouts",
     recovery_score: "recovery_score",
     recovery_state: "recovery_state",
     sleep_duration: "sleep_duration",
@@ -101,7 +103,12 @@
   }
   function memberList(config) {
     if(Array.isArray(config.members) && config.members.length) {
-      return config.members.filter(m=>m && typeof m==="object").slice(0,12);
+      const seen=new Set();
+      return config.members.filter(m=>{
+        if(!m || typeof m!=="object" || !m.entity || seen.has(m.entity))return false;
+        seen.add(m.entity);
+        return true;
+      }).slice(0,12);
     }
     return [{name:config.name || "Min trening",entity:config.entity || "sensor.athlth_last_workout",entities:config.entities || {}}];
   }
@@ -159,12 +166,12 @@
     const s=entity(hass,member,"next_workout");
     const nextTitle=valueOf(s);
     const time=valueOf(entity(hass,member,"next_workout_time"));
-    const heading=goal || "Min treningsplan";
+    const heading="Mine kommende økter";
     const schedule=entity(hass,member,"training_schedule");
     const rawEvents=schedule && schedule.attributes && schedule.attributes.events;
     const future=Array.isArray(rawEvents) ? rawEvents.filter(e=>e && e.start && Number.isFinite(asDate(e.start).getTime()) && asDate(e.start)>=new Date()).sort((a,b)=>asDate(a.start)-asDate(b.start)).slice(0,3) : [];
     const upcoming=future.length ? future.map(e=>'<div class="plan-row"><span>'+esc(niceDate(e.start)||"Planlagt")+'</span><strong>'+esc(e.title||"Treningsøkt")+'</strong></div>').join("") : '<div class="plan-row"><span>Neste planlagte økt</span><strong>'+esc(nextTitle||"Ikke tilgjengelig")+'</strong></div>'+(time?'<div class="muted">'+esc(niceDate(time)||"")+'</div>':"");
-    const blocks='<div class="plan-title">'+esc(heading)+'</div>'+(progress===null?"":'<div class="muted">Målprogresjon '+fmt(progress)+'%</div>'+bar(progress))+upcoming+'<p class="note">Detaljert programstruktur vises når ATHLTH deler disse opplysningene.</p>';
+    const blocks='<div class="plan-title">'+esc(heading)+'</div>'+upcoming+'<p class="note">Detaljert treningsplan er ennå ikke eksportert fra ATHLTH. Personlige mål vises separat.</p>';
     return card("Treningsplan",blocks);
   }
   function recovery(hass,member) {
@@ -180,6 +187,7 @@
   function active(hass,member) {
     const s=entity(hass,member,"workout_active");
     if(!s || s.state!=="on") return card("Live trening",empty("Ingen aktiv treningsøkt registrert."));
+    if(!liveFresh(hass,member)) return card("Live trening",empty("Tilkoblingen er ikke oppdatert nylig. Liveøkt kan ikke bekreftes.")+lastSync(hass,member));
     const phase=valueOf(entity(hass,member,"workout_phase"));
     const secs=num(entity(hass,member,"active_workout_elapsed_seconds"));
     const dist=num(entity(hass,member,"active_workout_distance_meters"));
@@ -226,6 +234,38 @@
     const setLabel=set===null?"—":fmt(set)+(total===null?"":" / "+fmt(total));
     return card("Styrke",'<div class="live"><span class="live-dot"></span> '+(rest!==null&&rest>0?"PAUSE":"PÅGÅENDE")+'</div><div class="activity-name">'+esc(exercise)+'</div><div class="stats cols-3">'+statistic("Sett",setLabel,"")+statistic("Reps",fmt(repetitions),"")+statistic("Vekt",fmt(kg,1),"kg")+'</div>'+(rest!==null&&rest>0?'<div class="muted">Pause '+fmt(rest)+' sekunder</div>':"")+lastSync(hass,member));
   }
+
+  function history(hass,member) {
+    const entityState=entity(hass,member,"recent_workouts");
+    const records=entityState&&entityState.attributes&&entityState.attributes.workouts;
+    if(!Array.isArray(records)||!records.length) {
+      return card("Mottatte økter",empty("Ingen fullførte økter er mottatt siden tilkoblingen.")+
+        '<p class="note">Dette er ikke hele treningshistorikken i ATHLTH-appen.</p>');
+    }
+    const rows=records.slice(0,8).map((workout)=>{
+      const name=String(workout.name||"Treningsøkt");
+      const kind=String(workout.type||"").toLowerCase();
+      const icon=kind.includes("strength")?"✦":kind.includes("treadmill")?"▤":"↗";
+      const date=niceDate(workout.ended_at)||"Registrert økt";
+      const seconds=Number(workout.duration_seconds);
+      const distance=Number(workout.distance_meters);
+      const details=[];
+      if(Number.isFinite(seconds)&&seconds>=0&&workout.duration_seconds!==undefined)details.push(duration(seconds));
+      if(Number.isFinite(distance)&&distance>0)details.push(fmt(distance/1000,2)+" km");
+      return '<div class="history-row"><span class="history-glyph">'+icon+'</span><div class="history-content"><strong>'+
+        esc(name)+'</strong><div class="muted">'+esc(date)+(details.length?" · "+esc(details.join(" · ")):"")+
+        '</div></div></div>';
+    }).join("");
+    return card("Mottatte økter",rows+'<p class="note">Viser opptil ti fullførte økter som Home Assistant har mottatt. Ingen eldre økter blir automatisk hentet.</p>');
+  }
+
+  function liveFresh(hass,member) {
+    const last=valueOf(entity(hass,member,"last_sync"));
+    if(!last) return false;
+    const timestamp=asDate(last).getTime();
+    const elapsed=Date.now()-timestamp;
+    return Number.isFinite(elapsed)&&elapsed>=-60000&&elapsed<=600000;
+  }
   function family(hass,members) {
     const items=members.map((m)=>{
       const p=num(entity(hass,m,"weekly_progress"));
@@ -238,7 +278,7 @@
   function dashboard(hass,members,selected) {
     const member=members[selected]||members[0];
     const chooser=members.length>1?'<div class="member-tabs" role="group" aria-label="Velg familiemedlem">'+members.map((m,i)=>'<button type="button" data-athlth-member="'+i+'" class="'+(i===selected?"selected":"")+'">'+esc(m.name||"Medlem "+(i+1))+'</button>').join("")+'</div>':"";
-    return '<div class="dashboard"><div class="dashboard-head">'+logo()+'<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+chooser+'<div class="dashboard-grid"><div class="wide">'+week(hass,member)+'</div><div>'+today(hass,member)+'</div><div>'+next(hass,member)+'</div><div class="wide">'+last(hass,member)+'</div><div>'+plan(hass,member)+'</div><div>'+recovery(hass,member)+'</div><div class="wide">'+calendar(hass,member)+'</div>'+(members.length>1?'<div class="wide">'+family(hass,members)+'</div>':"")+'<div class="wide">'+active(hass,member)+'</div></div></div>';
+    return '<div class="dashboard"><div class="dashboard-head">'+logo()+'<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+chooser+'<div class="dashboard-grid"><div class="wide">'+week(hass,member)+'</div><div>'+today(hass,member)+'</div><div>'+next(hass,member)+'</div><div class="wide">'+last(hass,member)+'</div><div>'+plan(hass,member)+'</div><div>'+recovery(hass,member)+'</div><div class="wide">'+calendar(hass,member)+'</div><div class="wide">'+history(hass,member)+'</div>'+(members.length>1?'<div class="wide">'+family(hass,members)+'</div>':"")+'<div class="wide">'+active(hass,member)+'</div></div></div>';
   }
   function today(hass,member){
     const schedule=entity(hass,member,"training_schedule");
@@ -267,6 +307,7 @@
     '.plan-row{display:flex;flex-direction:column;gap:5px;margin-top:18px;padding-top:15px;border-top:1px solid var(--divider-color,#ddd)}.plan-row span{font-size:11px;color:var(--ath-muted)}.plan-row strong{font-size:15px}',
     '.empty{display:flex;align-items:center;gap:10px;color:var(--ath-muted);font-size:12px;min-height:56px;line-height:1.5}.empty-dot{width:9px;height:9px;background:var(--ath-gold);opacity:.8;border-radius:50%;flex-shrink:0}',
     '.recovery{display:flex;justify-content:space-between;align-items:end;gap:12px}.family-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0}.family-row+.family-row{border-top:1px solid var(--divider-color,#eee)}.avatar{background:color-mix(in srgb,var(--ath-gold) 15%,transparent);border-radius:50%;height:40px;width:40px;display:grid;place-items:center;color:var(--ath-gold)}.family-main{flex:1;min-width:0}.family-main strong{font-size:14px}.family-main .progress{margin:8px 0 0}.family-percent{font-size:13px;font-weight:700;color:var(--ath-gold)}',
+    '.history-row{display:flex;gap:12px;align-items:center;padding:12px 0}.history-row+.history-row{border-top:1px solid var(--divider-color,#eee)}.history-glyph{display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border-radius:12px;color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 12%,transparent);font-size:18px}.history-content{flex:1;min-width:0}.history-content strong{font-size:13px;overflow-wrap:anywhere}',
     '.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.calendar-day{border:1px solid var(--divider-color,#eee);border-radius:12px;padding:8px 5px;min-width:0;min-height:70px}.calendar-day.today{border-color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 10%,transparent)}.calendar-date{font-size:10px;color:var(--ath-muted);margin-bottom:5px}.calendar-item{font-size:10px;background:color-mix(in srgb,var(--ath-gold) 14%,transparent);border-radius:6px;padding:4px;overflow-wrap:anywhere;margin-top:4px}.calendar-off{font-size:12px;color:var(--ath-muted)}',
     '.live{display:flex;align-items:center;gap:7px;color:var(--ath-gold);font-size:11px;font-weight:800;letter-spacing:1px;margin-bottom:12px}.live-dot{width:8px;height:8px;border-radius:50%;background:var(--ath-gold)}',
     '.dashboard{display:block}.dashboard-head{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-bottom:20px;padding:0 4px}.dashboard-head .brand{font-size:20px;letter-spacing:4px;gap:7px}.dashboard-head .brandmark{height:44px;width:44px}.subbrand{font-size:9px;letter-spacing:2px;color:var(--ath-muted);font-weight:700;padding-left:51px}',
@@ -275,79 +316,6 @@
     '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.dashboard-grid{grid-template-columns:minmax(0,1fr)}.dashboard-grid>.wide{grid-column:span 1}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
   ].join("");
 
-
-  // Visual card editor: use real, connected ATHLTH last-workout entity IDs.
-  // Family membership is explicit. We never enumerate or export health values.
-  if(!customElements.get("athlth-card-editor")){
-    class ATHLTHEditor extends HTMLElement {
-      constructor(){
-        super();
-        this._root=this.attachShadow({mode:"open"});
-        this._config={};
-        this._root.addEventListener("change",(event)=>this._changed(event));
-      }
-      set hass(hass){this._hass=hass;this._render();}
-      setConfig(config){this._config=Object.assign({},config);this._render();}
-      _available(){
-        return Object.keys((this._hass&&this._hass.states)||{})
-          .filter(id=>/^sensor\.[a-z0-9_]+_last_workout$/.test(id))
-          .sort();
-      }
-      _emit(){
-        this.dispatchEvent(new CustomEvent("config-changed",{
-          bubbles:true,composed:true,detail:{config:this._config}
-        }));
-      }
-      _changed(event){
-        const target=event.target;
-        if(!target || !target.dataset) return;
-        if(target.dataset.role==="entity"){
-          const prev=this._config.entity;
-          this._config.entity=target.value;
-          if(prev!==target.value)delete this._config.entities;
-          this._emit();
-        }
-        if(target.dataset.role==="member"){
-          const entries=this._available();
-          const selected=new Set(Array.from(this._root.querySelectorAll("input[data-role=member]:checked")).map(e=>e.value));
-          const previous=Array.isArray(this._config.members)?this._config.members:[];
-          this._config.members=entries.filter(e=>selected.has(e)).map(e=>{
-            return previous.find(m=>m.entity===e)||{name:this._suggestName(e),entity:e};
-          });
-          this._emit();this._render();
-        }
-        if(target.dataset.role==="name"){
-          const index=Number(target.dataset.index);
-          if(Number.isInteger(index)&&Array.isArray(this._config.members)&&this._config.members[index]){
-            this._config.members=this._config.members.map((m,i)=>i===index?Object.assign({},m,{name:target.value.slice(0,64)}):m);
-            this._emit();
-          }
-        }
-      }
-      _suggestName(id){
-        const s=this._hass && this._hass.states && this._hass.states[id];
-        const friendly=s && s.attributes && s.attributes.friendly_name;
-        return String(friendly||id).replace(/\s*(last workout|siste økt)$/i,"").slice(0,64);
-      }
-      _render(){
-        if(!this._hass || !this._root)return;
-        const membersCard=/athlth-(dashboard|family)-card/.test(String(this._config.type||""));
-        const available=this._available();
-        const selected=this._config.entity||"sensor.athlth_last_workout";
-        const already=Array.isArray(this._config.members)?this._config.members:[];
-        const chosen=new Set(already.map(m=>m.entity));
-        const intro=membersCard?"Velg hvilke ATHLTH-installasjoner som skal vises.":"Velg en ATHLTH-installasjon.";
-        const options=available.map(id=>'<option value="'+esc(id)+'"'+(selected===id?" selected":"")+'>'+esc(this._suggestName(id))+' · '+esc(id)+'</option>').join("");
-        const members=available.map(id=>'<label class="item"><input type="checkbox" data-role="member" value="'+esc(id)+'"'+(chosen.has(id)?" checked":"")+'><span>'+esc(this._suggestName(id))+'</span></label>').join("");
-        const names=already.map((m,i)=>'<label class="name">Visningsnavn <input data-role="name" data-index="'+i+'" type="text" maxlength="64" value="'+esc(m.name||"")+'"></label>').join("");
-        this._root.innerHTML='<style>:host{display:block;font:inherit;color:var(--primary-text-color,#111)}.panel{display:grid;gap:12px;border:1px solid var(--divider-color,#ddd);border-radius:16px;padding:16px}.help{font-size:12px;color:var(--secondary-text-color,#777)}.item{display:flex;align-items:center;gap:10px;font-size:13px}.name{display:grid;gap:4px;font-size:12px}select,input[type=text]{box-sizing:border-box;width:100%;border:1px solid var(--divider-color,#bbb);border-radius:10px;padding:10px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#111)}input[type=checkbox]{accent-color:#C7955F}</style>'+
-          '<div class="panel"><strong>ATHLTH · Kortinnstillinger</strong><div class="help">'+intro+'</div>'+
-          (!available.length?'<p class="help">Ingen ATHLTH-enheter funnet. Koble først til ATHLTH i Home Assistant.</p>':
-            membersCard?'<div>'+members+'</div>'+names:'<select data-role="entity">'+options+'</select>')+'</div>';
-      }
-    }
-    customElements.define("athlth-card-editor",ATHLTHEditor);
-  }
 
   // Visual editor for choosing paired ATHLTH installations. Data stays local.
   class ATHLTHConfigEditor extends HTMLElement {
@@ -367,7 +335,10 @@
           const members=this._members();
           if(!members[idx])return;
           if(key==="name")members[idx].name=target.value.slice(0,64);
-          else members[idx].entity=target.value;
+          else {
+            if(members.some((m,i)=>i!==idx&&m.entity===target.value))return;
+            members[idx].entity=target.value;
+          }
           this._config={...this._config,members};
         }else return;
         this._send();
@@ -379,7 +350,10 @@
         const members=this._members();
         if(action==="add"&&members.length<12){
           const anchors=this._anchors();
-          members.push({name:"Person "+(members.length+1),entity:anchors[0]||"sensor.athlth_last_workout"});
+          const selected=new Set(members.map(m=>m.entity));
+          const free=anchors.find(e=>!selected.has(e));
+          if(!free)return;
+          members.push({name:"Person "+(members.length+1),entity:free});
         }else if(action==="remove"&&members.length>1){
           const i=Number(button.dataset.index);
           if(!Number.isInteger(i)||i<0||i>=members.length)return;
@@ -449,7 +423,6 @@
       getCardSize(){return kind==="athlth-dashboard-card"?12:kind==="athlth-family-card"?5:3;}
       static getStubConfig(){return {type:"custom:"+kind};}
       static getConfigElement(){return document.createElement("athlth-config-editor");}
-      static getConfigElement(){return document.createElement("athlth-card-editor");}
       connectedCallback(){
         this._root.addEventListener("click",(event)=>{
           const btn=event.target && event.target.closest && event.target.closest("[data-athlth-member]");
@@ -475,6 +448,7 @@
           "athlth-calendar-card":()=>calendar(this._hass,member),
           "athlth-goals-card":()=>goals(this._hass,member),
           "athlth-strength-card":()=>strength(this._hass,member),
+          "athlth-history-card":()=>history(this._hass,member),
           "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected)
         };
         this._root.innerHTML="<style>"+CSS+"</style>"+builders[kind]();

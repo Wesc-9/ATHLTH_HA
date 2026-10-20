@@ -239,3 +239,10 @@ is not available, refresh Home Assistant; manual dashboard resource:
 Changes on the main branch are development work until tested on a live Home
 Assistant installation and shipped in a tagged HACS release. Existing HACS
 installations will not automatically update from a source commit alone.
+
+**Recent history scope:** The received-history sensor stores only the ten latest
+successfully received and completed workout events per paired installation.
+It is not a historical backfill and does not replace the app's workout archive.
+History is erased from active entity storage on sharing revoke or unpair. If
+Recorder has already stored older states, users may need to purge Recorder
+history separately under Home Assistant controls.

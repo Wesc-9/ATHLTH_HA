@@ -50,7 +50,7 @@ const second={
 };
 
 test("all premium ATHLTH cards register once",()=>{
-  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength"];
+  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history"];
   for(const name of names)assert.ok(registry.has("athlth-"+name+"-card"),name);
   assert.equal(window.customCards.length,names.length);
 });
@@ -105,4 +105,49 @@ test("missing and disabled data remain unavailable, never fake training values",
   const html=card("athlth-week-card",{}, {states:{}});
   assert.match(html,/Koble til ATHLTH/);
   assert.doesNotMatch(html,/154 min/);
+});
+
+
+test("show only bounded received workout history, with no invention",()=>{
+  const records=[{id:"1",name:"4x4 Intervals",type:"run",ended_at:"2026-10-20T16:00:00Z",
+    duration_seconds:2400,distance_meters:6500}];
+  const states={...first,"sensor.athlth_recent_workouts":state("1",{workouts:records})};
+  const html=card("athlth-history-card",{}, {states});
+  assert.match(html,/4x4 Intervals/);
+  assert.match(html,/6,5 km/);
+  assert.match(html,/Ikke hele treningshistorikken|Ingen eldre økter/);
+  assert.doesNotMatch(html,/<img src/);
+});
+
+test("dashboard does not represent a goal title as the active training plan",()=>{
+  const html=card("athlth-plan-card",{}, {states:first});
+  assert.match(html,/Mine kommende økter/);
+  assert.doesNotMatch(html,/Run 10K/);
+});
+
+test("live card does not show stale heart rate as current",()=>{
+  const states={...first,
+    "binary_sensor.athlth_workout_active":state("on"),
+    "sensor.athlth_workout_heart_rate":state("185"),
+    "sensor.athlth_last_sync":state("2026-10-19T06:00:00Z")};
+  const html=card("athlth-active-card",{}, {states});
+  assert.match(html,/Liveøkt kan ikke bekreftes/);
+  assert.doesNotMatch(html,/185 bpm/);
+});
+
+test("visual editor has one unambiguous custom element",()=>{
+  const definition=registry.get("athlth-dashboard-card");
+  const document={createElement(name){return name;}};
+  globalThis.document=document;
+  assert.equal(definition.getConfigElement(),"athlth-config-editor");
+  assert.ok(registry.has("athlth-config-editor"));
+});
+
+test("same device cannot be counted twice in family overview",()=>{
+  const members=[
+    {name:"Person 1",entity:"sensor.athlth_last_workout"},
+    {name:"Duplicate",entity:"sensor.athlth_last_workout"}];
+  const html=card("athlth-family-card",{members},{states:first});
+  assert.match(html,/Person 1/);
+  assert.doesNotMatch(html,/Duplicate/);
 });
