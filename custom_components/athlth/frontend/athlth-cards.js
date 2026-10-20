@@ -25,6 +25,7 @@
     weekly_training_minutes: "weekly_training_minutes",
     weekly_distance: "weekly_distance",
     next_workout: "next_workout",
+    training_schedule: "training_schedule",
     next_workout_time: "next_workout_time",
     last_workout: "last_workout",
     recovery_score: "recovery_score",
@@ -57,9 +58,10 @@
   };
   const fmt = (n, digits=0) => n===null || !Number.isFinite(n) ? "—" :
     new Intl.NumberFormat("nb-NO",{maximumFractionDigits:digits,minimumFractionDigits:digits}).format(n);
+  const asDate = (raw) => typeof raw==="number" || (/^\d{10,13}$/.test(String(raw||""))) ? new Date(Number(raw)* (Number(raw)<1e12?1000:1)) : new Date(raw);
   const niceDate = (s) => {
     if(!s) return null;
-    const d = new Date(s);
+    const d = asDate(s);
     return Number.isNaN(d.valueOf()) ? null : d.toLocaleString("nb-NO",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
   };
   const duration = (seconds) => {
@@ -116,7 +118,7 @@
     const s=entity(hass,member,"next_workout");
     const label=valueOf(s);
     const raw=valueOf(entity(hass,member,"next_workout_time")) || (s && s.attributes && s.attributes.scheduled_at);
-    const d=raw?new Date(raw):null;
+    const d=raw?asDate(raw):null;
     const isToday = d && Number.isFinite(d.getTime()) && d.toDateString()===(new Date()).toDateString();
     const title=todayOnly?"I dag":"Neste økt";
     if(todayOnly && !isToday) return card(title,empty("Ingen bekreftet økt fra ATHLTH for i dag."));
@@ -133,7 +135,7 @@
     const outdoor=/outdoor|run|running|walk|hike|cycling/.test(type) && !/treadmill|indoor/.test(type);
     const route=entity(hass,member,"last_workout_route");
     const routeEnd=route && route.attributes && route.attributes.ended_at;
-    const hasMatch = route && usable(route) && a.ended_at && routeEnd && Math.abs(new Date(a.ended_at).getTime()-new Date(routeEnd).getTime())<180000;
+    const hasMatch = route && usable(route) && a.ended_at && routeEnd && Math.abs(asDate(a.ended_at).getTime()-asDate(routeEnd).getTime())<180000;
     const image=outdoor && hasMatch ? '<div class="map"><img loading="lazy" alt="Kart over siste utendørs treningsøkt" src="/api/camera_proxy/'+encodeURIComponent(route.entity_id)+'"></div>' : "";
     const distance=Number.isFinite(Number(a.distance_meters))?fmt(Number(a.distance_meters)/1000,2)+" km":"—";
     const seconds=Number.isFinite(Number(a.duration_seconds))?duration(Number(a.duration_seconds)):"—";
@@ -148,7 +150,11 @@
     const nextTitle=valueOf(s);
     const time=valueOf(entity(hass,member,"next_workout_time"));
     const heading=goal || "Min treningsplan";
-    const blocks='<div class="plan-title">'+esc(heading)+'</div>'+(progress===null?"":'<div class="muted">Målprogresjon '+fmt(progress)+'%</div>'+bar(progress))+'<div class="plan-row"><span>Neste planlagte økt</span><strong>'+esc(nextTitle||"Ikke tilgjengelig")+'</strong></div>'+(time?'<div class="muted">'+esc(niceDate(time)||"")+'</div>':"")+'<p class="note">Fullstendig planinnhold krever flere data fra ATHLTH-appen.</p>';
+    const schedule=entity(hass,member,"training_schedule");
+    const rawEvents=schedule && schedule.attributes && schedule.attributes.events;
+    const future=Array.isArray(rawEvents) ? rawEvents.filter(e=>e && e.start && Number.isFinite(asDate(e.start).getTime()) && asDate(e.start)>=new Date()).sort((a,b)=>asDate(a.start)-asDate(b.start)).slice(0,3) : [];
+    const upcoming=future.length ? future.map(e=>'<div class="plan-row"><span>'+esc(niceDate(e.start)||"Planlagt")+'</span><strong>'+esc(e.title||"Treningsøkt")+'</strong></div>').join("") : '<div class="plan-row"><span>Neste planlagte økt</span><strong>'+esc(nextTitle||"Ikke tilgjengelig")+'</strong></div>'+(time?'<div class="muted">'+esc(niceDate(time)||"")+'</div>':"");
+    const blocks='<div class="plan-title">'+esc(heading)+'</div>'+(progress===null?"":'<div class="muted">Målprogresjon '+fmt(progress)+'%</div>'+bar(progress))+upcoming+'<p class="note">Detaljert programstruktur vises når ATHLTH deler disse opplysningene.</p>';
     return card("Treningsplan",blocks);
   }
   function recovery(hass,member) {
@@ -185,7 +191,15 @@
     const chooser=members.length>1?'<div class="member-tabs" role="group" aria-label="Velg familiemedlem">'+members.map((m,i)=>'<button type="button" data-athlth-member="'+i+'" class="'+(i===selected?"selected":"")+'">'+esc(m.name||"Medlem "+(i+1))+'</button>').join("")+'</div>':"";
     return '<div class="dashboard"><div class="dashboard-head">'+logo()+'<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+chooser+'<div class="dashboard-grid"><div class="wide">'+week(hass,member)+'</div><div>'+today(hass,member)+'</div><div>'+next(hass,member)+'</div><div class="wide">'+last(hass,member)+'</div><div>'+plan(hass,member)+'</div><div>'+recovery(hass,member)+'</div>'+(members.length>1?'<div class="wide">'+family(hass,members)+'</div>':"")+'<div class="wide">'+active(hass,member)+'</div></div></div>';
   }
-  function today(hass,member){return next(hass,member,true);}
+  function today(hass,member){
+    const schedule=entity(hass,member,"training_schedule");
+    const raw=schedule && schedule.attributes && schedule.attributes.events;
+    const todayDate=new Date().toDateString();
+    const upcoming=Array.isArray(raw)?raw.filter(e=>e && e.start && asDate(e.start).toDateString()===todayDate && asDate(e.end||e.start)>=new Date()).sort((a,b)=>asDate(a.start)-asDate(b.start)): [];
+    if(!upcoming.length) return next(hass,member,true);
+    const rows=upcoming.slice(0,3).map(e=>'<div class="plan-row"><span>'+esc(niceDate(e.start)||"")+'</span><strong>'+esc(e.title||"Treningsøkt")+'</strong></div>').join("");
+    return card("I dag",rows);
+  }
   const CSS = [
     ':host{display:block;--ath-gold:',GOLD,';--ath-text:var(--primary-text-color,#151519);--ath-muted:var(--secondary-text-color,#7d7d84);color:var(--ath-text);font-family:inherit}',
     'ha-card{display:block;background:var(--card-background-color,#fff);border:1px solid var(--divider-color,rgba(0,0,0,.08));border-radius:22px;box-shadow:0 8px 26px rgba(0,0,0,.035);overflow:hidden;color:var(--ath-text)}',

@@ -52,6 +52,11 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         native_unit_of_measurement="%",
     ),
     SensorEntityDescription(
+        key="training_schedule",
+        name="Training schedule",
+        icon="mdi:calendar-week",
+    ),
+    SensorEntityDescription(
         key="next_workout",
         name="Next workout",
         icon="mdi:calendar-clock",
@@ -346,6 +351,10 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
         if key == "pending_commands":
             return len(self._client.pending_commands)
 
+        if key == "training_schedule":
+            events = self._client.state.get("calendar_events")
+            return len(events) if isinstance(events, list) else None
+
         value = self._client.state.get(key)
 
         if (
@@ -411,6 +420,19 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     ),
                 }
             )
+
+        if self.entity_description.key == "training_schedule":
+            events = self._client.state.get("calendar_events")
+            if isinstance(events, list):
+                attributes["events"] = [
+                    {
+                        key: item[key]
+                        for key in ("id", "title", "start", "end", "type")
+                        if key in item
+                    }
+                    for item in events[:16]
+                    if isinstance(item, dict)
+                ]
 
         if self.entity_description.key == "next_workout":
             attributes["scheduled_at"] = self._client.state.get(
