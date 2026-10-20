@@ -246,3 +246,10 @@ It is not a historical backfill and does not replace the app's workout archive.
 History is erased from active entity storage on sharing revoke or unpair. If
 Recorder has already stored older states, users may need to purge Recorder
 history separately under Home Assistant controls.
+
+**Training plan fields:** When the ATHLTH iPhone app version supports it and
+the user opts into training-calendar sharing, the integration accepts a
+`training_plan` snapshot (id, title, current week, total weeks, optional
+start time) plus optional per-calendar-entry `status` (planned/completed/
+skipped) and `plan_id`. Older app versions remain compatible and show
+only scheduled sessions. No plan data is sent when calendar sharing is off.

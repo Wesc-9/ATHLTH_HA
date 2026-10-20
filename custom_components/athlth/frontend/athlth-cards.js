@@ -30,6 +30,7 @@
     weekly_distance: "weekly_distance",
     next_workout: "next_workout",
     training_schedule: "training_schedule",
+    training_plan: "training_plan",
     next_workout_time: "next_workout_time",
     last_workout: "last_workout",
     recent_workouts: "recent_workouts",
@@ -161,18 +162,25 @@
     return card("Siste økt",image+'<div class="activity-hero"><span class="glyph">'+(type.includes("strength")?"✦":type.includes("treadmill")?"▤":"↗")+'</span><div><div class="activity-name">'+esc(name)+'</div><div class="muted">'+(niceDate(a.ended_at)?esc(niceDate(a.ended_at)):"Fullført økt")+'</div></div></div><div class="stats cols-3">'+statistic("Distanse",distance,"")+statistic("Tid",seconds,"")+statistic("Snittpuls",heart,"")+'</div>'+source+lastSync(hass,member));
   }
   function plan(hass,member) {
-    const goal=valueOf(entity(hass,member,"active_goal"));
-    const progress=num(entity(hass,member,"goal_progress"));
+    const program=entity(hass,member,"training_plan");
+    const title=valueOf(program);
+    const info=program&&program.attributes||{};
+    const week=Number(info.current_week);
+    const weeks=Number(info.total_weeks);
+    const validWeeks=title&&Number.isInteger(week)&&Number.isInteger(weeks)&&weeks>0&&week>=0&&week<=weeks;
+    const header=title?'<div class="plan-title">'+esc(title)+'</div>'+(validWeeks?'<div class="muted">'+(week===0?"Starter snart":"Uke "+week+" av "+weeks)+'</div>':""):
+      '<div class="plan-title">Kommende trening</div>';
     const s=entity(hass,member,"next_workout");
     const nextTitle=valueOf(s);
     const time=valueOf(entity(hass,member,"next_workout_time"));
-    const heading="Mine kommende økter";
     const schedule=entity(hass,member,"training_schedule");
-    const rawEvents=schedule && schedule.attributes && schedule.attributes.events;
-    const future=Array.isArray(rawEvents) ? rawEvents.filter(e=>e && e.start && Number.isFinite(asDate(e.start).getTime()) && asDate(e.start)>=new Date()).sort((a,b)=>asDate(a.start)-asDate(b.start)).slice(0,3) : [];
-    const upcoming=future.length ? future.map(e=>'<div class="plan-row"><span>'+esc(niceDate(e.start)||"Planlagt")+'</span><strong>'+esc(e.title||"Treningsøkt")+'</strong></div>').join("") : '<div class="plan-row"><span>Neste planlagte økt</span><strong>'+esc(nextTitle||"Ikke tilgjengelig")+'</strong></div>'+(time?'<div class="muted">'+esc(niceDate(time)||"")+'</div>':"");
-    const blocks='<div class="plan-title">'+esc(heading)+'</div>'+upcoming+'<p class="note">Detaljert treningsplan er ennå ikke eksportert fra ATHLTH. Personlige mål vises separat.</p>';
-    return card("Treningsplan",blocks);
+    const rawEvents=schedule&&schedule.attributes&&schedule.attributes.events;
+    const future=Array.isArray(rawEvents)?rawEvents.filter(e=>e && e.status!=="completed" && e.status!=="skipped" && e.start && Number.isFinite(asDate(e.start).getTime()) && asDate(e.start)>=new Date()).sort((a,b)=>asDate(a.start)-asDate(b.start)).slice(0,3):[];
+    const upcoming=future.length?future.map(e=>'<div class="plan-row"><span>'+esc(niceDate(e.start)||"Planlagt")+'</span><strong>'+esc(e.title||"Treningsøkt")+'</strong></div>').join(""):
+      '<div class="plan-row"><span>Neste planlagte økt</span><strong>'+esc(nextTitle||"Ikke tilgjengelig")+'</strong></div>'+(time?'<div class="muted">'+esc(niceDate(time)||"")+'</div>':"");
+    const note=title?'Detaljert øktstruktur er ennå ikke delt med Home Assistant.':
+      'Aktiv treningsplan er ikke delt. Koble til ATHLTH og aktiver deling av treningskalender.';
+    return card("Treningsplan",header+upcoming+'<p class="note">'+esc(note)+'</p>');
   }
   function recovery(hass,member) {
     const score=num(entity(hass,member,"recovery_score"));
@@ -208,9 +216,13 @@
       const day=new Date(monday);day.setDate(day.getDate()+i);
       const tomorrow=new Date(day);tomorrow.setDate(tomorrow.getDate()+1);
       const sessions=events.filter(e=>asDate(e.start)>=day&&asDate(e.start)<tomorrow);
-      return '<div class="calendar-day '+(day.toDateString()===now.toDateString()?"today":"")+'"><div class="calendar-date">'+name+' '+day.getDate()+'</div>'+(sessions.length?sessions.map(e=>'<div class="calendar-item">'+esc(e.title)+'</div>').join(""):'<span class="calendar-off">—</span>')+'</div>';
+      return '<div class="calendar-day '+(day.toDateString()===now.toDateString()?"today":"")+'"><div class="calendar-date">'+name+' '+day.getDate()+'</div>'+(sessions.length?sessions.map(e=>{
+        const status=e.status==="completed"?"completed":e.status==="skipped"?"skipped":"planned";
+        const marker=status==="completed"?"✓ ":status==="skipped"?"– ":"";
+        return '<div class="calendar-item status-'+status+'">'+marker+esc(e.title)+'</div>';
+      }).join(""):'<span class="calendar-off">—</span>')+'</div>';
     }).join("");
-    return card("Ukeplan",'<div class="calendar-grid">'+cells+'</div><p class="note">Planlagte økter – ikke bekreftet gjennomføring.</p>');
+    return card("Ukeplan",'<div class="calendar-grid">'+cells+'</div><p class="note">Statusene kommer fra ATHLTH. Eldre appversjoner deler bare planlagte økter.</p>');
   }
   function goals(hass,member) {
     const name=valueOf(entity(hass,member,"active_goal"));
@@ -284,9 +296,12 @@
     const schedule=entity(hass,member,"training_schedule");
     const raw=schedule && schedule.attributes && schedule.attributes.events;
     const todayDate=new Date().toDateString();
-    const upcoming=Array.isArray(raw)?raw.filter(e=>e && e.start && asDate(e.start).toDateString()===todayDate && asDate(e.end||e.start)>=new Date()).sort((a,b)=>asDate(a.start)-asDate(b.start)): [];
+    const upcoming=Array.isArray(raw)?raw.filter(e=>e && e.start && asDate(e.start).toDateString()===todayDate).sort((a,b)=>asDate(a.start)-asDate(b.start)): [];
     if(!upcoming.length) return next(hass,member,true);
-    const rows=upcoming.slice(0,3).map(e=>'<div class="plan-row"><span>'+esc(niceDate(e.start)||"")+'</span><strong>'+esc(e.title||"Treningsøkt")+'</strong></div>').join("");
+    const rows=upcoming.slice(0,3).map(e=>{
+      const label=e.status==="completed"?"Fullført":e.status==="skipped"?"Hoppet over":"Planlagt";
+      return '<div class="plan-row"><span>'+esc(label)+' · '+esc(niceDate(e.start)||"")+'</span><strong>'+esc(e.title||"Treningsøkt")+'</strong></div>';
+    }).join("");
     return card("I dag",rows);
   }
   const CSS = [
@@ -308,6 +323,7 @@
     '.empty{display:flex;align-items:center;gap:10px;color:var(--ath-muted);font-size:12px;min-height:56px;line-height:1.5}.empty-dot{width:9px;height:9px;background:var(--ath-gold);opacity:.8;border-radius:50%;flex-shrink:0}',
     '.recovery{display:flex;justify-content:space-between;align-items:end;gap:12px}.family-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0}.family-row+.family-row{border-top:1px solid var(--divider-color,#eee)}.avatar{background:color-mix(in srgb,var(--ath-gold) 15%,transparent);border-radius:50%;height:40px;width:40px;display:grid;place-items:center;color:var(--ath-gold)}.family-main{flex:1;min-width:0}.family-main strong{font-size:14px}.family-main .progress{margin:8px 0 0}.family-percent{font-size:13px;font-weight:700;color:var(--ath-gold)}',
     '.history-row{display:flex;gap:12px;align-items:center;padding:12px 0}.history-row+.history-row{border-top:1px solid var(--divider-color,#eee)}.history-glyph{display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border-radius:12px;color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 12%,transparent);font-size:18px}.history-content{flex:1;min-width:0}.history-content strong{font-size:13px;overflow-wrap:anywhere}',
+    '.calendar-item.status-completed{background:color-mix(in srgb,#558878 15%,transparent);color:var(--ath-text)}.calendar-item.status-skipped{opacity:.54;text-decoration:line-through}',
     '.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.calendar-day{border:1px solid var(--divider-color,#eee);border-radius:12px;padding:8px 5px;min-width:0;min-height:70px}.calendar-day.today{border-color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 10%,transparent)}.calendar-date{font-size:10px;color:var(--ath-muted);margin-bottom:5px}.calendar-item{font-size:10px;background:color-mix(in srgb,var(--ath-gold) 14%,transparent);border-radius:6px;padding:4px;overflow-wrap:anywhere;margin-top:4px}.calendar-off{font-size:12px;color:var(--ath-muted)}',
     '.live{display:flex;align-items:center;gap:7px;color:var(--ath-gold);font-size:11px;font-weight:800;letter-spacing:1px;margin-bottom:12px}.live-dot{width:8px;height:8px;border-radius:50%;background:var(--ath-gold)}',
     '.dashboard{display:block}.dashboard-head{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-bottom:20px;padding:0 4px}.dashboard-head .brand{font-size:20px;letter-spacing:4px;gap:7px}.dashboard-head .brandmark{height:44px;width:44px}.subbrand{font-size:9px;letter-spacing:2px;color:var(--ath-muted);font-weight:700;padding-left:51px}',

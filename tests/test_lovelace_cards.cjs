@@ -151,3 +151,33 @@ test("same device cannot be counted twice in family overview",()=>{
   assert.match(html,/Person 1/);
   assert.doesNotMatch(html,/Duplicate/);
 });
+
+
+test("real active ATHLTH plan title and week come from shared metadata",()=>{
+  const states={...first,
+    "sensor.athlth_training_plan":state("8 week 4x4",{current_week:3,total_weeks:8,id:"plan-1"}),
+    "sensor.athlth_training_schedule":state("2",{events:[
+      {id:"past",title:"Done intervals",start:"2026-10-19T18:00:00Z",status:"completed"},
+      {id:"future",title:"Upcoming run",start:"2099-10-20T18:00:00Z",status:"planned"}
+    ]})
+  };
+  const html=card("athlth-plan-card",{}, {states});
+  assert.match(html,/8 week 4x4/);
+  assert.match(html,/Uke 3 av 8/);
+  assert.match(html,/Upcoming run/);
+  assert.doesNotMatch(html,/Done intervals/);
+});
+
+test("week calendar distinguishes completed and skipped from planned sessions",()=>{
+  const now=new Date();
+  const today=now.toISOString();
+  const states={...first,
+    "sensor.athlth_training_schedule":state("2",{events:[
+      {id:"complete",title:"Run completed",start:today,status:"completed"},
+      {id:"skipped",title:"Walk skipped",start:today,status:"skipped"}
+    ]})
+  };
+  const html=card("athlth-calendar-card",{}, {states});
+  assert.match(html,/status-completed/);
+  assert.match(html,/status-skipped/);
+});
