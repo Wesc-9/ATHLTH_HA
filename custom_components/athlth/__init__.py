@@ -15,6 +15,7 @@ from homeassistant.helpers.network import NoURLAvailableError
 from homeassistant.helpers.storage import Store
 
 from .actions import async_register_services
+from .frontend import async_register_premium_cards
 from .api import ATHLTHLocalPairView, ATHLTHPairView
 from .const import (
     CONF_CLOUDHOOK_URL,
@@ -249,6 +250,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         lambda: ha_webhook.async_unregister(hass, webhook_id)
     )
 
+    await async_register_premium_cards(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_register_services(hass)
     return True

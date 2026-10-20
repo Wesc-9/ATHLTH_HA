@@ -181,3 +181,58 @@ New user events include `workout_phase_updated`, `strength_set_updated`, `streng
 Home Assistant also registers safe ATHLTH actions: `athlth.sync_now`, `athlth.show_next_workout`, `athlth.send_notification`, `athlth.open_planned_workout`, `athlth.schedule_extra_workout` and `athlth.move_planned_workout`. Commands are queued per paired client and returned only on a later HMAC-authenticated ATHLTH contact. Scheduling from Home Assistant creates a standalone extra workout and intentionally does not alter the active ATHLTH training plan.
 
 A `binary_sensor.athlth_connection_healthy` entity summarizes stale synchronization and backed-up command/delivery queues. Additional ready-to-import blueprints cover home-gym mode, treadmill mode, workout completion, recovery evenings and PR celebrations.
+
+
+## Premium ATHLTH dashboard and modular cards (development)
+
+The premium Lovelace frontend uses the original ATHLTH pulse-A brand mark,
+warm-gold accents and a responsive layout. It is bundled within the HACS
+integration, with no external CDN and no fake workout data.
+
+For a complete dashboard see [examples/premium-dashboard.yaml](examples/premium-dashboard.yaml).
+Each of the following can also be used as a standalone Lovelace custom card:
+
+| Card type | Function |
+| --- | --- |
+| custom:athlth-dashboard-card | Combined ATHLTH dashboard, member selector |
+| custom:athlth-week-card | Weekly workout count, duration, distance, plan progress |
+| custom:athlth-today-card | Today's next planned workout |
+| custom:athlth-next-card | Next workout |
+| custom:athlth-last-card | Last completed workout, matching outdoor map if available |
+| custom:athlth-plan-card | Plan-oriented goal and next workout |
+| custom:athlth-family-card | Per-installation voluntary family summary |
+| custom:athlth-recovery-card | Shared recovery and health indicators |
+| custom:athlth-active-card | Currently active workout |
+
+Single-user config: choose type custom:athlth-dashboard-card and optionally
+entity sensor.athlth_last_workout.
+
+Family: set members to a list of objects with name and entity keys. The entity
+must be the exact last-workout sensor of each paired ATHLTH device. For example,
+the first member can use sensor.athlth_last_workout and another member the
+last-workout sensor reported by Home Assistant under Devices & services.
+Do not guess the other member's entity ID. A member may also provide entities
+mapping keys (weekly_progress, weekly_workout_count, recovery_score, etc.)
+to exact sensor IDs if entity names were customized.
+
+**Data accuracy:** No fabricated numbers, map routes or workout plan details are
+generated. Treadmill and indoor activities never show a GPS route; outdoor
+route images are only displayed when the completed workout and map timestamps
+match. Cards use the metrics explicitly shared by the ATHLTH app, and health
+data remain off unless each person enables their own sharing permissions.
+
+**Important limits:** Home Assistant currently pairs app installations
+independently, not unique ATHLTH accounts. Automatic deduplication across
+devices requires an authenticated stable account identity protocol in the app.
+Complete training-plan structure, exercise/set history, interval progression
+and long-term workout history also require extra app/protocol changes.
+This frontend does not claim these exports already exist. Home Assistant
+dashboard visibility is not an access-control boundary for sensitive health data.
+
+Resources register automatically when the integration loads. If a custom card
+is not available, refresh Home Assistant; manual dashboard resource:
+ /athlth/frontend/athlth-cards.js (JavaScript module).
+
+Changes on the main branch are development work until tested on a live Home
+Assistant installation and shipped in a tagged HACS release. Existing HACS
+installations will not automatically update from a source commit alone.
