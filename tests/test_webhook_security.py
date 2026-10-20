@@ -443,3 +443,29 @@ def test_training_plan_snapshot_is_validated_and_isolated():
             "end": "2026-10-20T19:00:00Z", "status": "lying",
         }]}},
     }) == "invalid_calendar_events"
+
+
+
+def test_foreground_completed_workout_snapshot_is_bounded():
+    """iPhone foreground last-workout metrics must be accepted without GPS."""
+    from custom_components.athlth.webhook import _validate_message
+    valid = {
+        "event": "sync_snapshot",
+        "payload": {"state": {
+            "last_workout": "Running",
+            "last_workout_type": "indoor_running",
+            "last_workout_duration_seconds": 2700.0,
+            "last_workout_distance_meters": 5500.0,
+            "last_workout_ended_at": "2026-10-20T17:55:00Z",
+            "last_workout_active_energy_kcal": 365.0,
+            "last_workout_average_heart_rate_bpm": None,
+            "last_workout_max_heart_rate_bpm": None,
+        }},
+    }
+    assert _validate_message(valid) is None
+
+    invalid = {"event": "sync_snapshot", "payload": {"state": {
+        **valid["payload"]["state"],
+        "last_workout_distance_meters": -100,
+    }}}
+    assert _validate_message(invalid) == "invalid_last_workout_distance_meters"
