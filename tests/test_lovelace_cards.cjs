@@ -317,3 +317,23 @@ test("status avatar uses the actual person initial",()=>{
   const html=card("athlth-status-card",{name:"Siri"},{states});
   assert.match(html,/aria-hidden="true">S<\/div>/);
 });
+
+
+test("family summary counts current online and training separately, not paired devices",()=>{
+  const states={...first,
+    "sensor.athlth_presence":state("online"),
+    "sensor.partner_last_workout":state("Strength"),
+    "sensor.partner_presence":state("training"),
+    "sensor.private_last_workout":state("Run"),
+    "sensor.private_presence":state("not_shared")
+  };
+  const html=card("athlth-family-card",{members:[
+    {name:"One",entity:"sensor.athlth_last_workout"},
+    {name:"Two",entity:"sensor.partner_last_workout"},
+    {name:"Three",entity:"sensor.private_last_workout"}
+  ]},{states});
+  assert.match(html,/1 trener nå/);
+  assert.match(html,/1 online/);
+  assert.match(html,/1 uten fersk status/);
+  assert.match(html,/Ikke delt/);
+});

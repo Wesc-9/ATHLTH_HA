@@ -364,6 +364,15 @@
     return Number.isFinite(elapsed)&&elapsed>=-60000&&elapsed<=240000;
   }
   function family(hass,members) {
+    const statusValues=members.map(m=>presence(hass,m));
+    const trainingCount=statusValues.filter(s=>s==="training").length;
+    const onlineCount=statusValues.filter(s=>s==="online").length;
+    const unknownCount=statusValues.filter(s=>s==="unknown"||s==="not_shared").length;
+    const summary='<div class="family-status-summary">'+
+      '<span class="family-count status-training"><i class="status-dot"></i>'+trainingCount+' trener nå</span>'+
+      '<span class="family-count status-online"><i class="status-dot"></i>'+onlineCount+' online</span>'+
+      (unknownCount?'<span class="family-count status-unknown">'+unknownCount+' uten fersk status</span>':"")+
+      '</div>';
     const items=members.map((m)=>{
       const plan=weeklyPlanStats(hass,m);
       const p=plan?plan.percent:num(entity(hass,m,"weekly_progress"));
@@ -371,7 +380,7 @@
       const nextName=valueOf(entity(hass,m,"next_workout"));
       return '<div class="family-row"><div class="avatar avatar-status status-'+presence(hass,m)+'" aria-hidden="true">'+memberInitial(m.name)+'</div><div class="family-main"><div class="family-identity"><strong>'+esc(m.name||"ATHLTH-bruker")+'</strong>'+statusPill(hass,m)+'</div><div class="muted">'+(count===null?"Ingen ukedata":fmt(count)+" økter denne uken")+'</div>'+(nextName?'<div class="muted">Neste: '+esc(nextName)+'</div>':"")+(p===null?"":bar(p))+'</div><div class="family-percent">'+(p===null?"—":fmt(p)+"%")+'</div></div>';
     }).join("");
-    return card("Familiens trening",items||empty("Ingen familiemedlemmer valgt."));
+    return card("Familiens trening",summary+(items||empty("Ingen familiemedlemmer valgt.")));
   }
   function dashboard(hass,members,selected) {
     const member=members[selected]||members[0];
@@ -410,6 +419,7 @@
     '.recovery{display:flex;justify-content:space-between;align-items:end;gap:12px}.family-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0}.family-row+.family-row{border-top:1px solid var(--divider-color,#eee)}.avatar{background:color-mix(in srgb,var(--ath-gold) 15%,transparent);border-radius:50%;height:40px;width:40px;display:grid;place-items:center;color:var(--ath-gold)}.family-main{flex:1;min-width:0}.family-main strong{font-size:14px}.family-main .progress{margin:8px 0 0}.family-percent{font-size:13px;font-weight:700;color:var(--ath-gold)}',
     '.history-row{display:flex;gap:12px;align-items:center;padding:12px 0}.history-row+.history-row{border-top:1px solid var(--divider-color,#eee)}.history-glyph{display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border-radius:12px;color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 12%,transparent);font-size:18px}.history-content{flex:1;min-width:0}.history-content strong{font-size:13px;overflow-wrap:anywhere}',
     '.calendar-item.status-completed{background:color-mix(in srgb,#558878 15%,transparent);color:var(--ath-text)}.calendar-item.status-skipped{opacity:.54;text-decoration:line-through}',
+    '.family-status-summary{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 12px;border-bottom:1px solid var(--divider-color,#eee)}.family-count{display:inline-flex;gap:5px;align-items:center;border-radius:99px;background:var(--secondary-background-color,#f5f4f1);padding:5px 9px;font-size:11px;font-weight:650}.family-count.status-unknown{color:var(--ath-muted)}',
     '.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}.calendar-day{border:1px solid var(--divider-color,#eee);border-radius:12px;padding:8px 5px;min-width:0;min-height:70px}.calendar-day.today{border-color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 10%,transparent)}.calendar-date{font-size:10px;color:var(--ath-muted);margin-bottom:5px}.calendar-item{font-size:10px;background:color-mix(in srgb,var(--ath-gold) 14%,transparent);border-radius:6px;padding:4px;overflow-wrap:anywhere;margin-top:4px}.calendar-off{font-size:12px;color:var(--ath-muted)}',
     '.live{display:flex;align-items:center;gap:7px;color:var(--ath-gold);font-size:11px;font-weight:800;letter-spacing:1px;margin-bottom:12px}.live-dot{width:8px;height:8px;border-radius:50%;background:var(--ath-gold)}',
     '.status-pill{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:750;white-space:nowrap;border-radius:100px;padding:6px 10px;border:1px solid var(--divider-color,#ddd);background:var(--secondary-background-color,#f3f3f3);color:var(--ath-muted)}.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#969699;flex-shrink:0}.status-pill.status-online{background:color-mix(in srgb,#317960 11%,var(--card-background-color,#fff));border-color:color-mix(in srgb,#317960 28%,transparent);color:#317960}.status-online .status-dot{background:#317960}.status-pill.status-training{background:color-mix(in srgb,var(--ath-gold) 14%,var(--card-background-color,#fff));border-color:color-mix(in srgb,var(--ath-gold) 38%,transparent);color:#9d713d}.status-training .status-dot{background:var(--ath-gold)}.status-pill.status-offline{opacity:.78}.status-pill.status-unknown{opacity:.7}.status-feature{display:flex;gap:14px;align-items:center}.status-name{flex:1;min-width:0}.avatar-status{position:relative;background:color-mix(in srgb,var(--ath-gold) 9%,var(--secondary-background-color,#eee));font-size:13px;font-weight:800;color:var(--ath-text);border:2px solid var(--divider-color,#ddd)}.avatar-status.status-training{border-color:var(--ath-gold)}.avatar-status.status-online{border-color:#317960}.avatar-status.status-offline{border-color:#9c9ca3}.family-identity{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.family-identity .status-pill{padding:3px 7px;font-size:10px}.family-identity .status-dot{width:6px;height:6px}',
