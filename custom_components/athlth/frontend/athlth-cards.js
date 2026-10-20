@@ -174,7 +174,7 @@
     const secs=num(entity(hass,member,"active_workout_elapsed_seconds"));
     const dist=num(entity(hass,member,"active_workout_distance_meters"));
     const bpm=num(entity(hass,member,"active_workout_heart_rate_bpm"));
-    const name=s.attributes && (s.attributes.workout_name || s.attributes.name || s.attributes.workout);
+    const name=s.attributes && (s.attributes.active_workout || s.attributes.workout_name || s.attributes.name || s.attributes.workout);
     return card("Live trening",'<div class="live"><span class="live-dot"></span> AKTIV ØKT</div><div class="activity-name">'+esc(name||"Treningsøkt")+'</div>'+(phase?'<div class="muted">Fase: '+esc(phase)+'</div>':"")+'<div class="stats cols-3">'+statistic("Varighet",duration(secs),"")+statistic("Distanse",dist===null?"—":fmt(dist/1000,2),"km")+statistic("Puls",fmt(bpm),"bpm")+'</div>'+lastSync(hass,member));
   }
   function family(hass,members) {
@@ -225,6 +225,79 @@
     '@media(max-width:600px){.dashboard-grid{grid-template-columns:minmax(0,1fr)}.dashboard-grid>.wide{grid-column:span 1}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
   ].join("");
 
+
+  // Visual card editor: use real, connected ATHLTH last-workout entity IDs.
+  // Family membership is explicit. We never enumerate or export health values.
+  if(!customElements.get("athlth-card-editor")){
+    class ATHLTHEditor extends HTMLElement {
+      constructor(){
+        super();
+        this._root=this.attachShadow({mode:"open"});
+        this._config={};
+        this._root.addEventListener("change",(event)=>this._changed(event));
+      }
+      set hass(hass){this._hass=hass;this._render();}
+      setConfig(config){this._config=Object.assign({},config);this._render();}
+      _available(){
+        return Object.keys((this._hass&&this._hass.states)||{})
+          .filter(id=>/^sensor\.[a-z0-9_]+_last_workout$/.test(id))
+          .sort();
+      }
+      _emit(){
+        this.dispatchEvent(new CustomEvent("config-changed",{
+          bubbles:true,composed:true,detail:{config:this._config}
+        }));
+      }
+      _changed(event){
+        const target=event.target;
+        if(!target || !target.dataset) return;
+        if(target.dataset.role==="entity"){
+          const prev=this._config.entity;
+          this._config.entity=target.value;
+          if(prev!==target.value)delete this._config.entities;
+          this._emit();
+        }
+        if(target.dataset.role==="member"){
+          const entries=this._available();
+          const selected=new Set(Array.from(this._root.querySelectorAll("input[data-role=member]:checked")).map(e=>e.value));
+          const previous=Array.isArray(this._config.members)?this._config.members:[];
+          this._config.members=entries.filter(e=>selected.has(e)).map(e=>{
+            return previous.find(m=>m.entity===e)||{name:this._suggestName(e),entity:e};
+          });
+          this._emit();this._render();
+        }
+        if(target.dataset.role==="name"){
+          const index=Number(target.dataset.index);
+          if(Number.isInteger(index)&&Array.isArray(this._config.members)&&this._config.members[index]){
+            this._config.members=this._config.members.map((m,i)=>i===index?Object.assign({},m,{name:target.value.slice(0,64)}):m);
+            this._emit();
+          }
+        }
+      }
+      _suggestName(id){
+        const s=this._hass && this._hass.states && this._hass.states[id];
+        const friendly=s && s.attributes && s.attributes.friendly_name;
+        return String(friendly||id).replace(/\s*(last workout|siste økt)$/i,"").slice(0,64);
+      }
+      _render(){
+        if(!this._hass || !this._root)return;
+        const membersCard=/athlth-(dashboard|family)-card/.test(String(this._config.type||""));
+        const available=this._available();
+        const selected=this._config.entity||"sensor.athlth_last_workout";
+        const already=Array.isArray(this._config.members)?this._config.members:[];
+        const chosen=new Set(already.map(m=>m.entity));
+        const intro=membersCard?"Velg hvilke ATHLTH-installasjoner som skal vises.":"Velg en ATHLTH-installasjon.";
+        const options=available.map(id=>'<option value="'+esc(id)+'"'+(selected===id?" selected":"")+'>'+esc(this._suggestName(id))+' · '+esc(id)+'</option>').join("");
+        const members=available.map(id=>'<label class="item"><input type="checkbox" data-role="member" value="'+esc(id)+'"'+(chosen.has(id)?" checked":"")+'><span>'+esc(this._suggestName(id))+'</span></label>').join("");
+        const names=already.map((m,i)=>'<label class="name">Visningsnavn <input data-role="name" data-index="'+i+'" type="text" maxlength="64" value="'+esc(m.name||"")+'"></label>').join("");
+        this._root.innerHTML='<style>:host{display:block;font:inherit;color:var(--primary-text-color,#111)}.panel{display:grid;gap:12px;border:1px solid var(--divider-color,#ddd);border-radius:16px;padding:16px}.help{font-size:12px;color:var(--secondary-text-color,#777)}.item{display:flex;align-items:center;gap:10px;font-size:13px}.name{display:grid;gap:4px;font-size:12px}select,input[type=text]{box-sizing:border-box;width:100%;border:1px solid var(--divider-color,#bbb);border-radius:10px;padding:10px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#111)}input[type=checkbox]{accent-color:#C7955F}</style>'+
+          '<div class="panel"><strong>ATHLTH · Kortinnstillinger</strong><div class="help">'+intro+'</div>'+
+          (!available.length?'<p class="help">Ingen ATHLTH-enheter funnet. Koble først til ATHLTH i Home Assistant.</p>':
+            membersCard?'<div>'+members+'</div>'+names:'<select data-role="entity">'+options+'</select>')+'</div>';
+      }
+    }
+    customElements.define("athlth-card-editor",ATHLTHEditor);
+  }
   for(const kind of Object.keys(DESCRIPTIONS)){
     if(customElements.get(kind)) continue;
     class ATHLTHCard extends HTMLElement {
@@ -243,6 +316,7 @@
       set hass(hass){this._hass=hass;this.render();}
       getCardSize(){return kind==="athlth-dashboard-card"?12:kind==="athlth-family-card"?5:3;}
       static getStubConfig(){return {type:"custom:"+kind};}
+      static getConfigElement(){return document.createElement("athlth-card-editor");}
       connectedCallback(){
         this._root.addEventListener("click",(event)=>{
           const btn=event.target && event.target.closest && event.target.closest("[data-athlth-member]");
