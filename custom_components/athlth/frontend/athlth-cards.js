@@ -82,7 +82,7 @@
     const m=Math.round(seconds/60);
     return m>=60 ? String(Math.floor(m/60))+" t "+String(m%60)+" min" : String(m)+" min";
   };
-  const logo = () => '<span class="brand"><svg class="brandmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M 8 67 L 28 67 C 34 67 43 20 50 8 C 57 11 64 55 72 58 L 84 58 M 49 49 L 59 88 L 69 65 L 92 65" fill="none" stroke="currentColor" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg><span>ATHLTH</span></span>';
+  const logo = () => '<span class="brand"><svg class="brandmark" viewBox="0 0 100 100" aria-hidden="true"><path d="M 8 67 L 28 67 C 34 67 43 20 50 8 C 57 11 64 55 72 58 L 84 58 M 49 49 L 59 88 L 69 65 L 92 65" fill="none" stroke="currentColor" stroke-width="15.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>ATHLTH</span></span>';
   const el = (tag, cls, content) => '<'+tag+' class="'+cls+'">'+content+'</'+tag+'>';
   const statistic = (name,val,unit) => '<div class="stat"><div class="stat-value">'+esc(val)+(unit ? '<small>'+esc(unit)+'</small>':"")+'</div><div class="stat-label">'+esc(name)+'</div></div>';
   const bar = (percent) => '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+esc(Math.round(percent))+'"><span style="width:'+String(Math.min(100,Math.max(0,percent)))+'%"></span></div>';
@@ -170,19 +170,48 @@
   function last(hass,member) {
     const s=entity(hass,member,"last_workout");
     const name=valueOf(s);
-    if(!name) return card("Siste økt",empty("Ingen fullført økt er delt med Home Assistant."));
-    const a=s.attributes || {};
+    if(!name)return card("Siste økt",empty("Ingen fullført økt er delt med Home Assistant."));
+    const a=s.attributes||{};
     const type=String(a.type||"").toLowerCase();
-    const outdoor=/outdoor|run|running|walk|hike|cycling/.test(type) && !/treadmill|indoor/.test(type);
+    const indoor=/treadmill|indoor/.test(type);
+    const strengthMode=/strength|weight|functional|lifting/.test(type);
+    const outdoor=!indoor&&!strengthMode&&/outdoor|run|walk|hike|cycling/.test(type);
     const route=entity(hass,member,"last_workout_route");
-    const routeEnd=route && route.attributes && route.attributes.ended_at;
-    const hasMatch = route && usable(route) && a.ended_at && routeEnd && Math.abs(asDate(a.ended_at).getTime()-asDate(routeEnd).getTime())<180000;
-    const image=outdoor && hasMatch ? '<div class="map"><img loading="lazy" alt="Kart over siste utendørs treningsøkt" src="/api/camera_proxy/'+encodeURIComponent(route.entity_id)+'"></div>' : "";
-    const distance=a.distance_meters!=null&&Number.isFinite(Number(a.distance_meters))?fmt(Number(a.distance_meters)/1000,2)+" km":"—";
-    const seconds=a.duration_seconds!=null&&Number.isFinite(Number(a.duration_seconds))?duration(Number(a.duration_seconds)):"—";
-    const heart=a.average_heart_rate_bpm!=null&&Number.isFinite(Number(a.average_heart_rate_bpm))?fmt(Number(a.average_heart_rate_bpm))+" bpm":"—";
-    const source=a.device ? '<span class="chip">'+esc(String(a.device))+'</span>':"";
-    return card("Siste økt",image+'<div class="activity-hero"><span class="glyph">'+(type.includes("strength")?"✦":type.includes("treadmill")?"▤":"↗")+'</span><div><div class="activity-name">'+esc(name)+'</div><div class="muted">'+(niceDate(a.ended_at)?esc(niceDate(a.ended_at)):"Fullført økt")+'</div></div></div><div class="stats cols-3">'+statistic("Distanse",distance,"")+statistic("Tid",seconds,"")+statistic("Snittpuls",heart,"")+'</div>'+source+lastSync(hass,member));
+    const routeEnd=route&&route.attributes&&route.attributes.ended_at;
+    const match=outdoor&&route&&usable(route)&&a.ended_at&&routeEnd&&
+      Math.abs(asDate(a.ended_at).getTime()-asDate(routeEnd).getTime())<180000;
+    const image=match?'<div class="map"><img loading="lazy" alt="Kart over siste utendørs treningsøkt" src="/api/camera_proxy/'+encodeURIComponent(route.entity_id)+'"></div>':"";
+    const number=(key)=>a[key]!=null&&a[key]!==""&&Number.isFinite(Number(a[key]))?Number(a[key]):null;
+    const meters=number("distance_meters");
+    const seconds=number("duration_seconds");
+    const pace=number("average_pace_seconds_per_km");
+    const bpm=number("average_heart_rate_bpm");
+    const energy=number("active_energy_kcal");
+    const climb=number("elevation_gain_meters");
+    const paceText=pace===null||pace<=0?"—":Math.floor(pace/60)+":"+String(Math.round(pace%60)).padStart(2,"0");
+    const distance=meters===null?"—":fmt(meters/1000,2);
+    const time=duration(seconds);
+    const stats=strengthMode?[
+      ["Varighet",time,""],
+      ["Energi",fmt(energy),"kcal"],
+      ["Snittpuls",fmt(bpm),"bpm"]
+    ]:[
+      ["Distanse",distance,"km"],
+      ["Varighet",time,""],
+      ["Tempo",paceText,"/km"],
+      ["Snittpuls",fmt(bpm),"bpm"]
+    ];
+    if(outdoor&&climb!==null)stats.push(["Høydemeter",fmt(climb),"m"]);
+    const metrics='<div class="stats cols-3">'+stats.map(v=>statistic(...v)).join("")+'</div>';
+    const icon=strengthMode?"✦":indoor?"▤":"↗";
+    const classification=strengthMode?"Styrke":indoor?"Løping innendørs":outdoor?"Utendørsaktivitet":"Fullført aktivitet";
+    const source=a.device?'<span class="chip">'+esc(String(a.device))+'</span>':"";
+    return card("Siste økt",image+
+      '<div class="activity-hero"><span class="glyph">'+icon+'</span><div>'+
+      '<div class="eyebrow">'+esc(classification)+'</div>'+
+      '<div class="activity-name">'+esc(name)+'</div>'+
+      '<div class="muted">'+esc(niceDate(a.ended_at)||"Fullført økt")+'</div>'+
+      '</div></div>'+metrics+source+lastSync(hass,member));
   }
   function plan(hass,member) {
     const program=entity(hass,member,"training_plan");

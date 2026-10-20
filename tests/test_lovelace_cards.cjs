@@ -227,3 +227,32 @@ test("missing completed-workout metrics display dash instead of fake zero",()=>{
   assert.doesNotMatch(html,/0,00 km/);
   assert.doesNotMatch(html,/0 bpm/);
 });
+
+
+test("strength completion shows energy and time, not running distance",()=>{
+  const states={...first,"sensor.athlth_last_workout":state("Full body strength",{
+    type:"strength",duration_seconds:3600,distance_meters:null,
+    active_energy_kcal:340,average_heart_rate_bpm:129
+  })};
+  const html=card("athlth-last-card",{}, {states});
+  assert.match(html,/Full body strength/);
+  assert.match(html,/340/);
+  assert.match(html,/Energi/);
+  assert.doesNotMatch(html,/Distanse<\/div>/);
+  assert.doesNotMatch(html,/\/api\/camera_proxy\//);
+});
+
+test("treadmill workout shows pace without a GPS map",()=>{
+  const states={...first,
+    "sensor.athlth_last_workout":state("Treadmill intervals",{
+      type:"indoor_running",duration_seconds:2400,distance_meters:6000,
+      average_pace_seconds_per_km:360,ended_at:"2026-10-20T15:20:00Z"
+    }),
+    "camera.athlth_last_workout_route":state("idle",{ended_at:"2026-10-20T15:20:00Z"})
+  };
+  const html=card("athlth-last-card",{}, {states});
+  assert.match(html,/Treadmill intervals/);
+  assert.match(html,/6:00/);
+  assert.match(html,/Løping innendørs/);
+  assert.doesNotMatch(html,/\/api\/camera_proxy\//);
+});
