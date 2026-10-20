@@ -34,6 +34,11 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         icon="mdi:run",
     ),
     SensorEntityDescription(
+        key="recent_workouts",
+        name="Received workout history",
+        icon="mdi:history",
+    ),
+    SensorEntityDescription(
         key="recovery_score",
         name="Recovery score",
         icon="mdi:heart-pulse",
@@ -355,6 +360,10 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
             events = self._client.state.get("calendar_events")
             return len(events) if isinstance(events, list) else None
 
+        if key == "recent_workouts":
+            records = self._client.state.get("recent_workouts")
+            return len(records) if isinstance(records, list) else None
+
         value = self._client.state.get(key)
 
         if (
@@ -422,6 +431,23 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     # ordinary sensor attributes (Recorder / HA history).
                 }
             )
+
+        if self.entity_description.key == "recent_workouts":
+            workouts = self._client.state.get("recent_workouts")
+            if isinstance(workouts, list):
+                attributes["workouts"] = [
+                    {
+                        field: record[field]
+                        for field in (
+                            "id", "name", "type", "ended_at", "duration_seconds",
+                            "distance_meters", "active_energy_kcal",
+                            "average_heart_rate_bpm", "device",
+                        )
+                        if field in record
+                    }
+                    for record in workouts[:10]
+                    if isinstance(record, dict)
+                ]
 
         if self.entity_description.key == "training_schedule":
             events = self._client.state.get("calendar_events")

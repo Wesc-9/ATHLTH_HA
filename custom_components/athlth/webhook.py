@@ -200,7 +200,7 @@ async def async_handle_webhook(
                 )
             )
         )
-        or event_type == "workout_route_map"
+        or event_type in {"workout_route_map", "workout_finished"}
     ):
         await runtime.async_save_clients()
 
@@ -654,8 +654,9 @@ async def _rotate_shared_secret(
                     CONF_SHARED_SECRET: shared_secret,
                 },
             )
-    else:
-        await runtime.async_save_additional_clients()
+    # Also flush primary stored routes and captured workout summaries on unpair.
+    # Otherwise they can return after a HA restart even after the app unpairs.
+    await runtime.async_save_clients()
 
 
 def _clear_live_state(client: ATHLTHClientRuntime) -> None:
@@ -679,6 +680,74 @@ def _copy_live_fields(
             if key in LIVE_STATE_KEYS:
                 client.state[key] = value
 
+
+
+
+def _record_recent_completed_workout(
+    client: ATHLTHClientRuntime,
+    payload: dict[str, Any],
+    now: int,
+) -> None:
+    """Record at most 10 *received* completed events; not app-wide history.
+
+    Never store GPS coordinates in this summary. Events are HMAC-authenticated
+    upstream, but we still bound all values and deduplicate repeated imports.
+    """
+    if payload.get("completed") is False:
+        return
+
+    raw_title = payload.get("name") or payload.get("workout_name") or payload.get("type")
+    if not isinstance(raw_title, str) or not raw_title.strip():
+        return
+    title = raw_title.strip()[:96]
+    kind = payload.get("type")
+    kind = kind.strip()[:48] if isinstance(kind, str) else "other"
+    ended_at = payload.get("ended_at", now)
+    if not isinstance(ended_at, (int, float, str)) or isinstance(ended_at, bool):
+        ended_at = now
+    if isinstance(ended_at, str):
+        ended_at = ended_at[:64]
+
+    record: dict[str, Any] = {
+        "name": title,
+        "type": kind,
+        "ended_at": ended_at,
+    }
+    metrics = {
+        "duration_seconds": (0, 604800),
+        "distance_meters": (0, 5_000_000),
+        "active_energy_kcal": (0, 100000),
+        "average_heart_rate_bpm": (20, 260),
+    }
+    for key, (minimum, maximum) in metrics.items():
+        value = payload.get(key)
+        if _number_in_range(value, minimum, maximum):
+            record[key] = float(value)
+
+    device = payload.get("device")
+    if isinstance(device, str) and device.strip():
+        record["device"] = device.strip()[:48]
+
+    explicit_id = payload.get("workout_id")
+    if isinstance(explicit_id, str) and 1 <= len(explicit_id) <= 96:
+        identifier = explicit_id
+    else:
+        basis = [ended_at, title, kind, record.get("duration_seconds"),
+                 record.get("distance_meters")]
+        identifier = hashlib.sha256(
+            json.dumps(basis, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:24]
+    record["id"] = identifier
+
+    previous = client.state.get("recent_workouts")
+    previous = previous if isinstance(previous, list) else []
+    client.state["recent_workouts"] = [
+        record,
+        *(
+            item for item in previous
+            if isinstance(item, dict) and item.get("id") != identifier
+        ),
+    ][:10]
 
 def _apply_event(
     client: ATHLTHClientRuntime,
@@ -745,6 +814,7 @@ def _apply_event(
 
     elif event_type == "workout_finished":
         client.state["workout_active"] = False
+        _record_recent_completed_workout(client, payload, now)
         if payload.get("completed", True):
             client.state["last_workout"] = (
                 payload.get("name")
@@ -850,6 +920,7 @@ def _apply_event(
             # image and historical workout attributes from active HA state.
             # Otherwise a camera entity could keep exposing an old GPS map.
             if "last_workout" in snapshot and snapshot["last_workout"] is None:
+                client.state.pop("recent_workouts", None)
                 for key in tuple(client.state):
                     if key.startswith("last_workout_"):
                         client.state.pop(key, None)

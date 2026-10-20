@@ -215,6 +215,7 @@ class ATHLTHRuntimeData:
 
         payload = {
             "primary_pending_commands": self.primary_client.pending_commands,
+            "primary_recent_workouts": self.primary_client.state.get("recent_workouts", [])[:10],
             "primary_calendar_events": self.primary_client.state.get(
                 "calendar_events",
                 [],
@@ -230,6 +231,7 @@ class ATHLTHRuntimeData:
                     "shared_secret": client.shared_secret,
                     "delivery_ids": client.delivery_ids,
                     "pending_commands": client.pending_commands,
+                    "recent_workouts": client.state.get("recent_workouts", [])[:10],
                     "calendar_events": client.state.get(
                         "calendar_events",
                         [],

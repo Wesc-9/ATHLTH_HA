@@ -134,6 +134,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         {},
     )
     primary_state = {}
+    saved_primary_workouts = stored_clients_data.get("primary_recent_workouts", [])
+    if isinstance(saved_primary_workouts, list):
+        primary_state["recent_workouts"] = [
+            item for item in saved_primary_workouts[:10] if isinstance(item, dict)
+        ]
     if isinstance(raw_primary_calendar_events, list):
         primary_state["calendar_events"] = raw_primary_calendar_events
     if isinstance(raw_primary_route_state, dict):
@@ -204,6 +209,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 {},
             )
             additional_state = {}
+            saved_workouts = raw_client.get("recent_workouts", [])
+            if isinstance(saved_workouts, list):
+                additional_state["recent_workouts"] = [
+                    item for item in saved_workouts[:10] if isinstance(item, dict)
+                ]
             if isinstance(raw_calendar_events, list):
                 additional_state["calendar_events"] = raw_calendar_events
             if isinstance(raw_route_state, dict):

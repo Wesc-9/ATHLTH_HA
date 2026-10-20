@@ -351,3 +351,46 @@ def test_revoking_completed_workout_sharing_clears_route_state():
     assert "last_workout_distance_meters" not in client.state
     assert "last_workout_route_points" not in client.state
     assert "last_workout_route_map_base64" not in client.state
+
+
+
+def test_recent_completed_workout_is_bounded_deduplicated_and_no_gps():
+    """Track only authenticated completed events for the current installation."""
+    from custom_components.athlth.runtime import ATHLTHClientRuntime
+    from custom_components.athlth.webhook import _apply_event
+
+    client = ATHLTHClientRuntime(
+        client_id="test-installation", name="A", shared_secret="test",
+    )
+    payload = {
+        "name": "Trail run", "type": "outdoor_run", "completed": True,
+        "duration_seconds": 1800, "distance_meters": 4000,
+        "ended_at": "2026-10-20T17:00:00+02:00",
+        "route_points": [[60.1, 12.3]],
+        "map_image_base64": "not-exported",
+    }
+    _apply_event(client, "workout_finished", payload, 1000)
+    _apply_event(client, "workout_finished", payload, 1001)
+    assert len(client.state["recent_workouts"]) == 1
+    assert client.state["recent_workouts"][0]["name"] == "Trail run"
+    assert "route_points" not in client.state["recent_workouts"][0]
+    assert "map_image_base64" not in client.state["recent_workouts"][0]
+
+    _apply_event(
+        client, "workout_finished",
+        {"completed": False, "name": "Cancelled", "type": "run"},
+        1002,
+    )
+    assert len(client.state["recent_workouts"]) == 1
+
+    for idx in range(20):
+        _apply_event(
+            client, "workout_finished",
+            {"completed": True, "name": "Walk", "type": "walk",
+             "ended_at": f"2026-10-21T10:{idx:02}:00Z"},
+            1100 + idx,
+        )
+    assert len(client.state["recent_workouts"]) == 10
+
+    _apply_event(client, "sync_snapshot", {"state": {"last_workout": None}}, 1200)
+    assert "recent_workouts" not in client.state
