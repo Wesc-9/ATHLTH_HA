@@ -36,6 +36,15 @@ jobs:
       - name: Hassfest validation
         uses: home-assistant/actions/hassfest@master
 
+  frontend-cards-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify ATHLTH card JavaScript syntax
+        run: node --check custom_components/athlth/frontend/athlth-cards.js
+      - name: Test dashboard rendering and member isolation
+        run: node --test tests/test_lovelace_cards.cjs
+
   test:
     runs-on: ubuntu-latest
     strategy:
