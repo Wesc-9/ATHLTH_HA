@@ -91,3 +91,28 @@ async def test_headless_home_assistant_does_not_require_frontend(monkeypatch):
     await frontend.async_register_premium_cards(hass)
     register.assert_awaited_once()
     add_js.assert_called_once()
+
+
+
+async def test_frontend_javascript_is_served_by_real_ha_http(
+    hass, hass_client, monkeypatch
+):
+    """Smoke-test static JS via Home Assistant's actual HTTP routing.
+
+    Browser rendering and a paired iPhone/Watch are separate acceptance tests.
+    """
+    from custom_components.athlth import frontend
+
+    # Avoid starting the entire HA frontend Python package just to confirm
+    # the bundled asset works through HA's HTTP/static route.
+    monkeypatch.setattr(frontend, "add_extra_js_url", lambda *_args: None)
+    hass.config.components.add("frontend")
+    await frontend.async_register_premium_cards(hass)
+
+    client = await hass_client()
+    response = await client.get(frontend.FRONTEND_URL)
+    assert response.status == 200
+    source = await response.text()
+    assert "athlth-dashboard-card" in source
+    assert "athlth-status-card" in source
+    assert "ATHLTH" in source
