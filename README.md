@@ -183,7 +183,7 @@ Home Assistant also registers safe ATHLTH actions: `athlth.sync_now`, `athlth.sh
 A `binary_sensor.athlth_connection_healthy` entity summarizes stale synchronization and backed-up command/delivery queues. Additional ready-to-import blueprints cover home-gym mode, treadmill mode, workout completion, recovery evenings and PR celebrations.
 
 
-## Premium ATHLTH dashboard and modular cards (development)
+## Premium ATHLTH dashboard and modular cards (v0.4.0)
 
 The premium Lovelace frontend uses the original ATHLTH pulse-A brand mark,
 warm-gold accents and a responsive layout. It is bundled within the HACS
@@ -236,9 +236,10 @@ Resources register automatically when the integration loads. If a custom card
 is not available, refresh Home Assistant; manual dashboard resource:
  /athlth/frontend/athlth-cards.js (JavaScript module).
 
-Changes on the main branch are development work until tested on a live Home
-Assistant installation and shipped in a tagged HACS release. Existing HACS
-installations will not automatically update from a source commit alone.
+HACS v0.4.0 includes the dashboard and modular cards. Install or update
+through HACS, restart Home Assistant, then reload the dashboard. A release
+passing automated tests has **not** yet been tested end-to-end on a real
+iPhone, Apple Watch and Home Assistant installation; see the manual checklist.
 
 **Recent history scope:** The received-history sensor stores only the ten latest
 successfully received and completed workout events per paired installation.
@@ -275,17 +276,16 @@ and its broader privacy model still govern access to a shared dashboard.
 
 ### Production-readiness checklist (before public release)
 
-The source branch is a development build, not proof that the cards have been
-loaded successfully in a real Home Assistant dashboard. Follow
+The release's automated tests are not proof that the cards have loaded
+successfully in a real Home Assistant dashboard. Follow
 [docs/LIVE_HOME_ASSISTANT_CHECKLIST.md](docs/LIVE_HOME_ASSISTANT_CHECKLIST.md)
 for a manual end-to-end walkthrough: installation, Lovelace resource loading,
 actual iPhone and Apple Watch training status, multiple family members, and
 consent revocation.
 
-**Required repository owner step:** In GitHub → ATHLTH_HA → **About** (gear)
-→ **Topics**, add `home-assistant`, `hacs`, and `fitness`. HACS currently fails
-only its topics check; this GitHub repository metadata cannot be repaired by
-committing a file. Do not silence or ignore the validation check.
+**HACS prerequisites:** Repository topics `hacs`, `home-assistant` and
+`training` are configured. Release automation must pass actual HACS
+validation, Hassfest, privacy, frontend and HA tests; no HACS check is skipped.
 
 **First-load troubleshooting:** The integration serves its frontend script at
 `/athlth/frontend/athlth-cards.js` and registers it automatically with HA.
