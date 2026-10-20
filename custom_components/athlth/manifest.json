@@ -11,8 +11,7 @@
   "dependencies": [
     "camera",
     "http",
-    "webhook",
-    "frontend"
+    "webhook"
   ],
   "documentation": "https://github.com/Wesc-9/ATHLTH_HA",
   "integration_type": "service",

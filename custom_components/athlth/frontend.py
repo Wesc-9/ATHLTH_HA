@@ -21,6 +21,11 @@ async def async_register_premium_cards(hass: HomeAssistant) -> None:
     if domain_data.get(_FRONTEND_REGISTERED):
         return
 
+    # Headless Home Assistant installations and unit-test runtimes may not
+    # have the optional frontend set up. ATHLTH sensors still need to load.
+    if "frontend" not in hass.config.components:
+        return
+
     await hass.http.async_register_static_paths(
         [StaticPathConfig(FRONTEND_URL, str(FRONTEND_PATH), cache_headers=False)]
     )
