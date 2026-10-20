@@ -102,9 +102,13 @@ async def test_frontend_javascript_is_served_by_real_ha_http(
     Browser rendering and a paired iPhone/Watch are separate acceptance tests.
     """
     from custom_components.athlth import frontend
+    from homeassistant.setup import async_setup_component
 
-    # Avoid starting the entire HA frontend Python package just to confirm
-    # the bundled asset works through HA's HTTP/static route.
+    # The generic HA test fixture does not create an HTTP server by default.
+    assert await async_setup_component(hass, "http", {"http": {}})
+    await hass.async_block_till_done()
+
+    # Avoid loading the entire UI bundle; verify HA's real static HTTP path.
     monkeypatch.setattr(frontend, "add_extra_js_url", lambda *_args: None)
     hass.config.components.add("frontend")
     await frontend.async_register_premium_cards(hass)
