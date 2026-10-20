@@ -27,3 +27,67 @@ def test_documented_dashboard_and_frontend_are_registered():
     assert "await async_register_premium_cards(hass)" in setup
     assert "async_register_static_paths" in front
     assert "add_extra_js_url" in front
+
+
+
+def test_manifest_uses_official_health_wellbeing_category():
+    """HA Marketplace labels describe the integration instead of its entities."""
+    import json
+    manifest = json.loads(
+        (ROOT / "custom_components" / "athlth" / "manifest.json").read_text()
+    )
+    assert manifest["categories"] == ["health_wellbeing"]
+
+
+async def test_frontend_static_resource_registration_is_idempotent(monkeypatch):
+    """A real frontend setup exposes the bundled resource exactly once."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, Mock
+    from custom_components.athlth import frontend
+
+    register = AsyncMock()
+    add_js = Mock()
+    monkeypatch.setattr(frontend, "add_extra_js_url", add_js)
+    hass = SimpleNamespace(
+        data={},
+        config=SimpleNamespace(components={"frontend"}),
+        http=SimpleNamespace(async_register_static_paths=register),
+    )
+
+    await frontend.async_register_premium_cards(hass)
+    await frontend.async_register_premium_cards(hass)
+
+    register.assert_awaited_once()
+    paths = register.call_args.args[0]
+    assert len(paths) == 1
+    assert paths[0].url_path == frontend.FRONTEND_URL
+    assert paths[0].path == str(frontend.FRONTEND_PATH)
+    assert frontend.FRONTEND_PATH.is_file()
+    add_js.assert_called_once_with(hass, frontend.FRONTEND_URL)
+
+
+async def test_headless_home_assistant_does_not_require_frontend(monkeypatch):
+    """Sensors and webhooks still run on installations without the HA UI."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, Mock
+    from custom_components.athlth import frontend
+
+    register = AsyncMock()
+    add_js = Mock()
+    monkeypatch.setattr(frontend, "add_extra_js_url", add_js)
+    hass = SimpleNamespace(
+        data={},
+        config=SimpleNamespace(components=set()),
+        http=SimpleNamespace(async_register_static_paths=register),
+    )
+
+    await frontend.async_register_premium_cards(hass)
+    register.assert_not_awaited()
+    add_js.assert_not_called()
+    assert not hass.data["athlth"].get("premium_frontend_registered")
+
+    # Frontend becomes available later: resource registration may retry.
+    hass.config.components.add("frontend")
+    await frontend.async_register_premium_cards(hass)
+    register.assert_awaited_once()
+    add_js.assert_called_once()

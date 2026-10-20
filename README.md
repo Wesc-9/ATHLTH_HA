@@ -272,3 +272,25 @@ updates are ephemeral and never queued for later replay. Pairing/"Connected"
 alone cannot make someone appear online. Users may disable online sharing
 independently of workout sharing. The Home Assistant app's authorization
 and its broader privacy model still govern access to a shared dashboard.
+
+### Production-readiness checklist (before public release)
+
+The source branch is a development build, not proof that the cards have been
+loaded successfully in a real Home Assistant dashboard. Follow
+[docs/LIVE_HOME_ASSISTANT_CHECKLIST.md](docs/LIVE_HOME_ASSISTANT_CHECKLIST.md)
+for a manual end-to-end walkthrough: installation, Lovelace resource loading,
+actual iPhone and Apple Watch training status, multiple family members, and
+consent revocation.
+
+**Required repository owner step:** In GitHub → ATHLTH_HA → **About** (gear)
+→ **Topics**, add `home-assistant`, `hacs`, and `fitness`. HACS currently fails
+only its topics check; this GitHub repository metadata cannot be repaired by
+committing a file. Do not silence or ignore the validation check.
+
+**First-load troubleshooting:** The integration serves its frontend script at
+`/athlth/frontend/athlth-cards.js` and registers it automatically with HA.
+Home Assistant frontend module loading can race custom-card creation on a
+fresh page. If a card is unavailable on the first load, check **Settings →
+Dashboards → Resources** and add the same URL as **JavaScript module**
+(only if not already registered), then refresh. Do not add duplicate
+resource entries. For YAML-managed Lovelace, put the resource in YAML instead.
