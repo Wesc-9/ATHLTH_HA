@@ -131,6 +131,7 @@ RESTORABLE_STATE_KEYS = frozenset(
         "respiratory_rate",
         "weekly_training_minutes",
         "weekly_distance_km",
+        "app_foreground",
         "workout_active",
         "active_workout",
         "active_workout_type",

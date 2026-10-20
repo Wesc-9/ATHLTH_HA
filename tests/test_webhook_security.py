@@ -469,3 +469,20 @@ def test_foreground_completed_workout_snapshot_is_bounded():
         "last_workout_distance_meters": -100,
     }}}
     assert _validate_message(invalid) == "invalid_last_workout_distance_meters"
+
+
+
+def test_foreground_privacy_field_requires_boolean_or_null():
+    from custom_components.athlth.webhook import _validate_message
+
+    def validated(flag):
+        return _validate_message({
+            "event": "sync_snapshot",
+            "payload": {"state": {"app_foreground": flag}},
+        })
+
+    assert validated(True) is None
+    assert validated(False) is None
+    assert validated(None) is None
+    assert validated("true") == "invalid_app_foreground"
+    assert validated(1) == "invalid_app_foreground"

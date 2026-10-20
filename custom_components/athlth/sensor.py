@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
+import time
 from typing import override
 
 from homeassistant.components.sensor import (
@@ -17,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -26,8 +28,14 @@ from .const import (
     signal_update,
 )
 from .runtime import ATHLTHClientRuntime, ATHLTHRuntimeData
+from .presence import resolve_presence
 
 SENSORS: tuple[SensorEntityDescription, ...] = (
+    SensorEntityDescription(
+        key="presence",
+        name="Presence",
+        icon="mdi:account-circle-outline",
+    ),
     SensorEntityDescription(
         key="last_workout",
         name="Last workout",
@@ -351,6 +359,9 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
         """Return the latest state received from this ATHLTH client."""
         key = self.entity_description.key
 
+        if key == "presence":
+            return resolve_presence(self._client.state, self._client.last_seen, now=time.time())
+
         if key == "last_sync":
             if self._client.last_seen is None:
                 return None
@@ -498,7 +509,7 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
         await super().async_added_to_hass()
 
         key = self.entity_description.key
-        if key in {"last_sync", "pending_commands"}:
+        if key in {"last_sync", "pending_commands", "presence"}:
             self.async_on_remove(
                 async_dispatcher_connect(
                     self.hass,
@@ -506,6 +517,14 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     self.async_write_ha_state,
                 )
             )
+            if key == "presence":
+                self.async_on_remove(
+                    async_track_time_interval(
+                        self.hass,
+                        lambda _now: self.async_write_ha_state(),
+                        timedelta(minutes=1),
+                    )
+                )
             return
 
         if key not in self._client.state:

@@ -508,6 +508,10 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
         if not _number_in_range(value, minimum, maximum):
             return f"invalid_{key}"
 
+    app_foreground = state.get("app_foreground")
+    if app_foreground is not None and type(app_foreground) is not bool:
+        return "invalid_app_foreground"
+
     workout_phase = state.get("workout_phase")
     if workout_phase is not None and workout_phase not in WORKOUT_PHASES:
         return "invalid_workout_phase"
