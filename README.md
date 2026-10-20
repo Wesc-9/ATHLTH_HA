@@ -28,22 +28,30 @@ Open **ATHLTH → Settings → Connections → Home Assistant**. Enter the six-d
 
 ## Connect through Tailscale outside the home
 
-ATHLTH can keep **two connection routes**: your normal local Home Assistant URL and a second, HTTPS Tailscale route. Pair locally first, then open **ATHLTH → Home Assistant → Local + VPN connection** to save the HTTPS URL. Existing signing keys remain in iOS Keychain when adding or updating this route.
+ATHLTH supports **two Home Assistant connection routes**: your usual local address and an optional VPN/external address. On a private, authenticated Tailscale VPN, the iPhone app supports **both** direct `http://100.x.x.x:8123` IP addresses **and** `https://<device>.<tailnet>.ts.net` URLs through Tailscale Serve. HTTPS is optional for the private Tailscale route, not a requirement. The app prefers local access on Wi-Fi and the configured VPN/external route elsewhere, with automatic fallback.
 
-**Important:** a Tailscale `100.64.0.0/10` IPv4 address is not an HTTPS hostname. iOS App Transport Security can reject `http://100.x.x.x:8123` even when the VPN is encrypted. Do not disable app-wide ATS, expose port 8123 to the public internet, or use Tailscale Funnel for this. Instead:
+### Option A — Direct Tailscale IP (simplest)
 
-1. Ensure Home Assistant is reachable from the iPhone when Tailscale is connected. Home Assistant must be on a Tailscale node or reachable through a properly configured Tailscale subnet router.
-2. Provide Home Assistant over **HTTPS within the tailnet**, for example using [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve) on a node that can reach Home Assistant. If the node running Tailscale also runs Home Assistant on port 8123, one common CLI setup is `tailscale serve --bg --https=443 127.0.0.1:8123`. Run `tailscale serve status` to obtain the actual `https://<device>.<tailnet>.ts.net` address. If Home Assistant is on a different host, configure the proxy target and Home Assistant reverse-proxy trust settings for that specific topology.
-3. Add the resulting `https://…ts.net` base URL under the **VPN / external address** field in ATHLTH and tap **Save route**, then **Test connection**. Both local and VPN routes can remain configured and ATHLTH switches between them.
-4. Test on cellular with Tailscale enabled. If the Home Assistant HTTPS page does not load from Safari over the VPN, fix tailnet routing, DNS or HTTPS proxying before retrying ATHLTH.
+1. Install/connect Tailscale on your iPhone. Verify that the Home Assistant page opens in Safari at the **actual Tailscale node IP**, such as `http://100.x.x.x:8123`. Do not substitute the example address for your real one. The Home Assistant host must be part of your tailnet or reachable through an appropriately configured subnet router.
+2. To pair for the first time over VPN, create the six-digit code under **Home Assistant → Settings → Devices & services → ATHLTH → Configure**, then enter the Tailscale IP in **ATHLTH → Settings → Connections → Home Assistant → Enter address manually** and choose **Pair with code**. Alternatively, pair on home Wi-Fi first.
+3. If already paired locally, open **ATHLTH → Home Assistant → Local + VPN connection**, enter the same Tailscale IP under **VPN / external address**, tap **Save route**, then **Test connection**. Keep both addresses configured if you use both. Updating the route does not replace the existing iOS Keychain pairing secret.
+4. Test again on cellular with Tailscale connected. If Safari cannot reach the Home Assistant page over the same IP and VPN, check your Tailscale connection, ACLs/grants and routing before troubleshooting ATHLTH.
 
-Code pairing from a Tailscale address is allowed in addition to ordinary private/local addresses, but still requires a Home Assistant administrator to generate a six-digit code valid for five minutes with limited attempts. The `100.64.0.0/10` range is shared address space, not proof of tailnet membership; protect access with Tailscale ACLs and Home Assistant network access controls. **Use HTTPS for remote pairing as well.**
+### Option B — Tailscale Serve with HTTPS (optional)
+
+If you prefer end-to-end HTTPS for the Home Assistant URL, use [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve) **inside your private tailnet**. On a node where Home Assistant is accessible at `127.0.0.1:8123`, one example command is `tailscale serve --bg --https=443 127.0.0.1:8123`. Run `tailscale serve status` to find the actual `https://<device>.<tailnet>.ts.net` URL. If Tailscale and Home Assistant run in different containers or on different hosts, the proxy target and Home Assistant trusted-proxy settings may need adjustment. Enter that HTTPS URL in the same ATHLTH address fields. **Tailscale Funnel is not needed** and should not be enabled just to connect ATHLTH.
+
+### Security notes
+
+- Direct HTTP is transported inside Tailscale's encrypted tunnel **only when the devices are actually connected through that VPN**. The `100.64.0.0/10` shared IPv4 range alone does **not** prove Tailscale membership. Keep Home Assistant port 8123 private, protect tailnet access with Tailscale grants/ACLs and device authentication, and do not forward port 8123 publicly.
+- In updated ATHLTH iOS builds, App Transport Security has a narrowly scoped HTTP exception for `100.64.0.0/10`; other public HTTP addresses are **not** globally permitted. Older installed ATHLTH builds may still block direct Tailscale HTTP until updated. HTTPS remains available and is a reasonable additional security layer.
+- Code pairing from a Tailscale address is supported in addition to ordinary private/local addresses, but an administrator must generate a short-lived six-digit code with limited attempts. Normal messages are signed after pairing. Both direct Tailscale HTTP and Tailscale Serve HTTPS are valid pairing routes.
 
 ## Security model
 
 1. An authenticated Home Assistant administrator explicitly generates a short-lived six-digit pairing code.
 2. The code is kept only in memory as a salted SHA-256 digest, expires after five minutes and is invalidated after successful use or five failed attempts.
-3. The unauthenticated code-exchange endpoint accepts requests only from local/private network addresses.
+3. The unauthenticated code-exchange endpoint accepts requests from local/private addresses and Tailscale's shared IPv4 range, with a short-lived one-time code and rate limiting; IP-range membership is not proof of VPN authentication.
 4. ATHLTH exchanges the one-time code for a random per-installation client ID, webhook endpoint and long signing secret.
 5. The six-digit code is never used for normal communication and is not stored in ATHLTH.
 6. Each paired ATHLTH app installation has its own client ID and signing secret. Pairing another household member does not invalidate existing clients.
