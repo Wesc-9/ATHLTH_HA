@@ -121,7 +121,7 @@ test("show only bounded received workout history, with no invention",()=>{
 
 test("dashboard does not represent a goal title as the active training plan",()=>{
   const html=card("athlth-plan-card",{}, {states:first});
-  assert.match(html,/Mine kommende økter/);
+  assert.match(html,/Kommende trening/);
   assert.doesNotMatch(html,/Run 10K/);
 });
 
