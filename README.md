@@ -198,6 +198,33 @@ warm-gold accents and a responsive layout. It is bundled within the HACS
 integration, with no external CDN and no fake workout data.
 
 For a complete dashboard see [examples/premium-dashboard.yaml](examples/premium-dashboard.yaml).
+
+### New dashboard layout: three cards across
+
+The combined `custom:athlth-dashboard-card` now uses an ATHLTH-branded
+dashboard header with a **featured last completed workout**. When the latest
+activity is an outdoor workout with a matching, received route image, the card
+displays the camera image and actual shared metrics (distance, duration, pace,
+heart rate and any available elevation/route-match data). Indoor, treadmill and
+strength workouts display their own visual without a fake GPS map.
+
+To give the dashboard room for **three columns on a wide desktop**, create a
+**Panel** dashboard view with just the combined ATHLTH dashboard card in it.
+The included `examples/premium-dashboard.yaml` already sets `panel: true`.
+On smaller view widths, the card automatically uses two columns or one on mobile.
+An ordinary masonry dashboard constrains cards to narrow columns, which may
+prevent the three-column layout even on a large desktop monitor.
+
+The latest-workout route is displayed only when its completion timestamp
+matches the completed outdoor workout. Home Assistant's signed camera image
+URL is used where provided; the frontend never invents routes or coordinates.
+The map requires ATHLTH to share the completed route and a rendered image.
+If that data is missing, the card explains why the map cannot be shown.
+
+Updating these files in GitHub does **not** automatically update a running
+Home Assistant instance: install/update the integration files, restart Home
+Assistant and reload the dashboard. A new HACS release is separate and must
+be explicitly published.
 Each of the following can also be used as a standalone Lovelace custom card:
 
 | Card type | Function |
