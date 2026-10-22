@@ -42,6 +42,16 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         icon="mdi:run",
     ),
     SensorEntityDescription(
+        key="athlete_profile",
+        name="Athlete profile",
+        icon="mdi:account-circle",
+    ),
+    SensorEntityDescription(
+        key="performance_records",
+        name="Performance records",
+        icon="mdi:trophy-outline",
+    ),
+    SensorEntityDescription(
         key="recent_workouts",
         name="Received workout history",
         icon="mdi:history",
@@ -376,6 +386,16 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
             events = self._client.state.get("calendar_events")
             return len(events) if isinstance(events, list) else None
 
+        if key == "athlete_profile":
+            return self._client.state.get("athlete_display_name")
+
+        if key == "performance_records":
+            records = self._client.state.get("performance_records")
+            events = self._client.state.get("received_personal_records")
+            return len(records) if isinstance(records, list) and records else (
+                len(events) if isinstance(events, list) else 0
+            )
+
         if key == "recent_workouts":
             records = self._client.state.get("recent_workouts")
             return len(records) if isinstance(records, list) else None
@@ -451,6 +471,29 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     # ordinary sensor attributes (Recorder / HA history).
                 }
             )
+
+        if self.entity_description.key == "athlete_profile":
+            attributes["avatar_url"] = self._client.state.get("athlete_avatar_url")
+
+        if self.entity_description.key == "performance_records":
+            records = self._client.state.get("performance_records")
+            if not isinstance(records, list) or not records:
+                records = self._client.state.get("received_personal_records")
+            if isinstance(records, list):
+                attributes["records"] = [
+                    {
+                        field: record[field]
+                        for field in ("id", "title", "value", "category", "date")
+                        if field in record
+                    }
+                    for record in records[:12]
+                    if isinstance(record, dict)
+                ]
+                attributes["source"] = (
+                    "ATHLTH snapshot"
+                    if self._client.state.get("performance_records")
+                    else "received PR events"
+                )
 
         if self.entity_description.key == "recent_workouts":
             workouts = self._client.state.get("recent_workouts")
