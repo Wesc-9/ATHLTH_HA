@@ -8,6 +8,9 @@
 # The recent activity bar chart and activity mix use only the last 10 received
 # completed workouts. They do not claim to represent full workout history.
 # Tomorrow is based only on dated and planned ATHLTH calendar/next-workout data.
+# Athlete photo/name and performance records require explicit consent inside
+# ATHLTH > Settings > Connections > Home Assistant. Profile sharing is OFF by default.
+# New athlete snapshot features are only sent when HA advertises support.
 # Each optional member must consent to sharing in their own ATHLTH app.
 #
 # All card types are bundled with ATHLTH_HA. Supported individual cards:
@@ -17,7 +20,8 @@
 # athlth-calendar-card, athlth-goals-card, athlth-strength-card,
 # athlth-history-card, athlth-status-card, athlth-tomorrow-card,
 # athlth-trend-card, athlth-mix-card, athlth-rhythm-card,
-# athlth-insight-card.
+# athlth-insight-card, athlth-feed-card, athlth-records-card,
+# athlth-data-card.
 #
 # Primary installation uses sensor.athlth_last_workout.
 # For additional accounts/devices, use the exact "Last workout" entity id
