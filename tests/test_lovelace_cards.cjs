@@ -337,3 +337,48 @@ test("family summary counts current online and training separately, not paired d
   assert.match(html,/1 uten fersk status/);
   assert.match(html,/Ikke delt/);
 });
+
+test("desktop dashboard has a three-column layout and a featured latest workout",()=>{
+  const html=card("athlth-dashboard-card",{}, {states:first});
+  assert.match(html,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(html,/class="feature-card span-2"/);
+  assert.match(html,/class="last-workout-layout"/);
+  assert.match(html,/Oversikt som motiverer/);
+  assert.match(html,/class="week-card"/);
+});
+
+test("outdoor latest workout displays its actual Home Assistant route camera picture",()=>{
+  const states={...first,
+    "camera.athlth_last_workout_route":state("idle",{
+      ended_at:"2026-10-20T15:20:00+02:00",
+      entity_picture:"/api/camera_proxy/camera.athlth_last_workout_route?token=signed123"
+    })
+  };
+  const html=card("athlth-last-card",{}, {states});
+  assert.match(html,/class="route-visual route-map"/);
+  assert.match(html,/src="\/api\/camera_proxy\/camera\.athlth_last_workout_route\?token=signed123"/);
+  assert.match(html,/Outdoor run/);
+  assert.match(html,/7,50/);
+});
+
+test("route image accepts Home Assistant camera access token fallback",()=>{
+  const states={...first,
+    "camera.athlth_last_workout_route":state("idle",{
+      ended_at:"2026-10-20T15:20:00+02:00",access_token:"temporary.token"
+    })
+  };
+  const html=card("athlth-last-card",{}, {states});
+  assert.match(html,/src="\/api\/camera_proxy\/camera\.athlth_last_workout_route\?token=temporary.token"/);
+});
+
+test("an old route never appears for a more recent workout",()=>{
+  const states={...first,
+    "camera.athlth_last_workout_route":state("idle",{
+      ended_at:"2026-10-19T15:20:00+02:00",
+      entity_picture:"/api/camera_proxy/camera.athlth_last_workout_route?token=old"
+    })
+  };
+  const html=card("athlth-last-card",{}, {states});
+  assert.doesNotMatch(html,/src="\/api\/camera_proxy\//);
+  assert.match(html,/GPS-kart vises når ruten fra denne økten er delt/);
+});
