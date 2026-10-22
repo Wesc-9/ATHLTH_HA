@@ -486,3 +486,106 @@ def test_foreground_privacy_field_requires_boolean_or_null():
     assert validated(None) is None
     assert validated("true") == "invalid_app_foreground"
     assert validated(1) == "invalid_app_foreground"
+
+
+def test_opt_in_athlete_avatar_and_performance_snapshot_are_strictly_validated():
+    """Accept only public HTTPS ATHLTH avatars and bounded user-approved records."""
+    record = {
+        "id": "run-5k",
+        "title": "Fastest 5K",
+        "value": "22:01",
+        "category": "running",
+        "date": "2026-10-22T10:00:00Z",
+    }
+    good = {
+        "event": "sync_snapshot",
+        "payload": {
+            "state": {
+                "athlete_display_name": "Aksel",
+                "athlete_avatar_url":
+                    "https://demo.supabase.co/storage/v1/object/public/"
+                    "profile-avatars/athlete/avatar.jpg?v=2",
+                "performance_records": [record],
+            }
+        },
+    }
+    assert _validate_message(good) is None
+
+    for bad_url in (
+        "http://127.0.0.1:8123/admin",
+        "https://demo.supabase.co.evil.example/storage/v1/object/public/profile-avatars/pic",
+        "https://demo.supabase.co/private/avatar.jpg",
+        "file:///etc/passwd",
+        "https://demo.supabase.co:9999/storage/v1/object/public/profile-avatars/avatar",
+        "https://[invalid",
+    ):
+        attempt = {
+            "event": "sync_snapshot",
+            "payload": {"state": {
+                "athlete_avatar_url": bad_url,
+            }},
+        }
+        assert _validate_message(attempt) == "invalid_athlete_avatar_url"
+
+    for invalid_records in (
+        [record, record],
+        [{**record, "private_token": "secret"}],
+        [{**record, "category": "secret"}],
+        [{**record, "value": "<" * 128}],
+        [record] * 13,
+        "not-a-list",
+    ):
+        attempt = {
+            "event": "sync_snapshot",
+            "payload": {"state": {"performance_records": invalid_records}},
+        }
+        assert _validate_message(attempt) == "invalid_performance_records"
+
+    assert _validate_message({
+        "event": "sync_snapshot",
+        "payload": {"state": {
+            "athlete_display_name": None,
+            "athlete_avatar_url": None,
+            "performance_records": [],
+        }},
+    }) is None
+
+
+def test_record_events_are_deduplicated_and_cleared_when_sharing_is_revoked():
+    from custom_components.athlth.runtime import ATHLTHClientRuntime
+    from custom_components.athlth.webhook import _apply_event
+
+    athlete = ATHLTHClientRuntime(
+        client_id="a", name="A", shared_secret="demo",
+    )
+    other = ATHLTHClientRuntime(
+        client_id="b", name="B", shared_secret="different",
+    )
+    _apply_event(athlete, "personal_record",
+                 {"title": "Fastest 5K", "value": "22:01"}, 1792650000)
+    _apply_event(athlete, "personal_record",
+                 {"title": "Fastest 5K", "value": "22:01"}, 1792650001)
+    assert len(athlete.state["received_personal_records"]) == 1
+    assert "received_personal_records" not in other.state
+
+    _apply_event(athlete, "sync_snapshot", {"state": {
+        "athlete_display_name": "A",
+        "performance_records": [{
+            "id": "run-5k",
+            "title": "Fastest 5K",
+            "value": "22:01",
+            "category": "running",
+            "date": "2026-10-22T10:00:00Z",
+        }],
+    }}, 1792650010)
+    assert len(athlete.state["performance_records"]) == 1
+    _apply_event(athlete, "sync_snapshot", {"state": {
+        "athlete_display_name": None,
+        "athlete_avatar_url": None,
+        "performance_records": [],
+    }}, 1792650030)
+    assert athlete.state["athlete_display_name"] is None
+    assert athlete.state["athlete_avatar_url"] is None
+    assert athlete.state["performance_records"] == []
+    assert "received_personal_records" not in athlete.state
+    assert "performance_records" not in other.state
