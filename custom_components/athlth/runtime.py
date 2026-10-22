@@ -219,6 +219,7 @@ class ATHLTHRuntimeData:
             "primary_workout_history": (
                 self.primary_client.state.get("workout_history") or []
             )[:90],
+            "primary_strength_progress": (self.primary_client.state.get("strength_progress") or [])[:60],
             "primary_identity": {
                 key: self.primary_client.state.get(key)
                 for key in ("athlete_display_name", "athlete_avatar_url")
@@ -247,6 +248,7 @@ class ATHLTHRuntimeData:
                     "pending_commands": client.pending_commands,
                     "recent_workouts": client.state.get("recent_workouts", [])[:10],
                     "workout_history": (client.state.get("workout_history") or [])[:90],
+                    "strength_progress": (client.state.get("strength_progress") or [])[:60],
                     "identity": {
                         key: client.state.get(key)
                         for key in ("athlete_display_name", "athlete_avatar_url")
