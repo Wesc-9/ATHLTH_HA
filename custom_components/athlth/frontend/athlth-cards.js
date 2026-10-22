@@ -425,13 +425,10 @@
 
   function safeAthleteImage(raw){
     if(typeof raw!=="string"||raw.length>512)return null;
-    try{
-      const parsed=new URL(raw);
-      if(parsed.protocol!=="https:" || !parsed.hostname.endsWith(".supabase.co") ||
-         !parsed.pathname.startsWith("/storage/v1/object/public/profile-avatars/") ||
-         parsed.username||parsed.password || parsed.port && parsed.port!=="443" || parsed.hash)return null;
-      return parsed.href;
-    }catch(_){return null;}
+    // Reject alternate schemes, credentials, localhost and arbitrary hosts
+    // without depending on global URL availability in older HA webviews.
+    return /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.supabase\.co\/storage\/v1\/object\/public\/profile-avatars\/[a-z0-9_./%-]+(?:\?[a-z0-9_=%&.-]+)?$/i.test(raw)
+      ? raw : null;
   }
   function athleteIdentity(hass,member){
     const profile=entity(hass,member,"athlete_profile");
