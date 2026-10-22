@@ -525,6 +525,7 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     existing = days.setdefault(day, {
                         "date": day, "sessions": 0,
                         "minutes": 0, "distance_km": 0,
+                        "distance_entries": 0,
                     })
                     existing["sessions"] += 1
                     existing["minutes"] += round(
@@ -533,6 +534,7 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     distance = record.get("distance_meters")
                     if isinstance(distance, (int, float)) and distance >= 0:
                         existing["distance_km"] += round(distance / 1000, 3)
+                        existing["distance_entries"] += 1
                 attributes["days"] = sorted(
                     days.values(), key=lambda x: x["date"]
                 )[-90:]
