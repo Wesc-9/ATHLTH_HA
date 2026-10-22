@@ -22,7 +22,12 @@
     "athlth-goals-card": ["ATHLTH Mål", "Personlige treningsmål og fremdrift."],
     "athlth-strength-card": ["ATHLTH Styrke", "Pågående styrkeøvelse, sett og repetisjoner."],
     "athlth-history-card": ["ATHLTH Mottatte økter", "Inntil ti fullførte økter mottatt etter oppkobling."],
-    "athlth-status-card": ["ATHLTH Status", "Online, trener nå eller offline for en ATHLTH-bruker."]
+    "athlth-status-card": ["ATHLTH Status", "Online, trener nå eller offline for en ATHLTH-bruker."],
+    "athlth-tomorrow-card": ["ATHLTH I morgen", "Morgendagens planlagte økter fra ATHLTH."],
+    "athlth-trend-card": ["ATHLTH Aktivitetstrend", "Syv dagers mottatt treningsvarighet."],
+    "athlth-mix-card": ["ATHLTH Treningsmiks", "Fordeling av øktkategorier i mottatt historikk."],
+    "athlth-rhythm-card": ["ATHLTH Ukerytme", "Visuell ukerytme fra treningskalenderen."],
+    "athlth-insight-card": ["ATHLTH Treningsinnsikt", "Forklarende innsikt fra faktisk delte verdier."]
   };
   const SUFFIX = {
     presence: "presence",
@@ -414,29 +419,59 @@
   }
   function dashboard(hass,members,selected) {
     const member=members[selected]||members[0];
+    const now=new Date();
+    const dateline=now.toLocaleDateString("nb-NO",{weekday:"long",day:"numeric",month:"long"});
     const chooser=members.length>1?'<div class="member-tabs" role="group" aria-label="Velg familiemedlem">'+members.map((m,i)=>'<button type="button" data-athlth-member="'+i+'" class="'+(i===selected?"selected":"")+'">'+esc(m.name||"Medlem "+(i+1))+'</button>').join("")+'</div>':"";
-    const intro='<div class="dashboard-intro"><div><div class="eyebrow">DITT TRENINGSSENTER</div>'+
-      '<h2>Oversikt som motiverer.</h2><p>Økter, fremgang og restitusjon — samlet fra ATHLTH.</p></div>'+
-      '<div class="dashboard-intro-mark" aria-hidden="true">A<span>•</span></div></div>';
-    return '<div class="dashboard">'+
-      '<div class="dashboard-head"><div class="dashboard-brand">'+logo()+
-      '<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+statusPill(hass,member)+'</div>'+
-      intro+chooser+
-      '<div class="dashboard-grid">'+
-        '<div class="feature-card span-2">'+last(hass,member)+'</div>'+
-        '<div class="week-card">'+week(hass,member)+'</div>'+
-        '<div>'+today(hass,member)+'</div>'+
-        '<div>'+recovery(hass,member)+'</div>'+
-        '<div>'+next(hass,member)+'</div>'+
-        '<div class="span-2">'+calendar(hass,member)+'</div>'+
-        '<div>'+plan(hass,member)+'</div>'+
-        '<div>'+goals(hass,member)+'</div>'+
-        '<div>'+active(hass,member)+'</div>'+
-        '<div>'+statusCard(hass,member)+'</div>'+
-        '<div class="span-2">'+history(hass,member)+'</div>'+
-        '<div>'+strength(hass,member)+'</div>'+
-        (members.length>1?'<div class="span-3">'+family(hass,members)+'</div>':"")+
-      '</div></div>';
+    const count=num(entity(hass,member,"weekly_workout_count"));
+    const minutes=num(entity(hass,member,"weekly_training_minutes"));
+    const recoveryScore=num(entity(hass,member,"recovery_score"));
+    const planStats=weeklyPlanStats(hass,member);
+    const progress=planStats?planStats.percent:num(entity(hass,member,"weekly_progress"));
+    const nextName=valueOf(entity(hass,member,"next_workout"));
+    const mainTitle=member.name&&member.name!=="Min trening"?member.name:"Din trening";
+    const signal=(k,v,u)=>'<div class="overview-signal"><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong><small>'+esc(u)+'</small></div>';
+    const hero='<section class="ath-hero" aria-label="Treningsoversikt">'+
+      '<div class="hero-noise" aria-hidden="true"><span></span><span></span><span></span></div>'+
+      '<div class="ath-hero-main"><div class="hero-overline">ATHLTH / TRAINING INTELLIGENCE · '+esc(dateline)+'</div>'+
+      '<h1>'+esc(mainTitle)+'<span>.</span></h1>'+
+      '<p>Et tydeligere bilde av innsatsen, rytmen og veien videre.</p>'+
+      '<div class="hero-next"><span class="hero-next-dot"></span><span>NESTE PLANLAGTE ØKT</span><strong>'+esc(nextName||"Ikke delt ennå")+'</strong></div></div>'+
+      '<div class="hero-signals">'+signal("ØKTER DENNE UKEN",fmt(count),"registrert")+
+      signal("TRENINGSTID",fmt(minutes),"minutter")+
+      signal("UKENS FREMDRIFT",progress===null?"—":fmt(progress)+"%","rapportert")+
+      signal("DAGSFORM",recoveryScore===null?"—":fmt(recoveryScore)+"%","sist delt")+'</div>'+
+      '</section>';
+    const section=(index,name,description)=>'<div class="studio-section-title span-3"><div><span class="studio-index">'+index+'</span>'+
+      '<h2>'+name+'</h2></div><p>'+description+'</p></div>';
+    const training=entity(hass,member,"workout_active");
+    const live=training&&training.state==="on"&&liveFresh(hass,member);
+    const grid='<div class="dashboard-grid">'+
+      section("01","Nå og neste","Siste gjennomførte økt og morgendagens plan.")+
+      '<div class="feature-card span-2">'+last(hass,member)+'</div>'+
+      '<div class="tomorrow-card">'+tomorrow(hass,member)+'</div>'+
+      section("02","Treningsgrunnlaget","Aktivitet, struktur og progresjon.")+
+      '<div class="span-2 trend-area">'+trend(hass,member)+'</div>'+
+      '<div class="week-card">'+week(hass,member)+'</div>'+
+      '<div>'+plan(hass,member)+'</div>'+
+      '<div class="span-2">'+calendar(hass,member)+'</div>'+
+      section("03","Se mønstrene","Oversikt over treningsfordeling og dagsform.")+
+      '<div>'+rhythm(hass,member)+'</div>'+
+      '<div>'+workoutMix(hass,member)+'</div>'+
+      '<div>'+recovery(hass,member)+'</div>'+
+      section("04","Forstå fremgangen","Hva som er kjent, og hva vi fortsatt trenger data for.")+
+      '<div class="span-2 insight-area">'+insights(hass,member)+'</div>'+
+      '<div>'+goals(hass,member)+'</div>'+
+      '<div class="span-2">'+history(hass,member)+'</div>'+
+      '<div>'+(live?active(hass,member):statusCard(hass,member))+'</div>'+
+      (members.length>1?'<div class="span-3">'+family(hass,members)+'</div>':"")+
+      '</div>';
+    return '<div class="dashboard studio-dashboard">'+
+      '<header class="dashboard-head"><div class="dashboard-brand">'+logo()+
+      '<div class="subbrand">PERFORMANCE / PERSONAL</div></div>'+statusPill(hass,member)+'</header>'+
+      chooser+hero+grid+
+      '<footer class="studio-footer"><span>ATHLTH / TRAINING INTELLIGENCE</span>'+
+      '<span>Data fra din tilkoblede ATHLTH-installasjon. Ingen beregnede økter eller GPS-ruter.</span></footer>'+
+      '</div>';
   }
   function today(hass,member){
     const schedule=entity(hass,member,"training_schedule");
@@ -450,6 +485,162 @@
     }).join("");
     return card("I dag",rows);
   }
+
+  // The Home Assistant browser supplies calendar dates in local time.
+  // None of these visualizations synthesize missing ATHLTH records.
+  const dayStart = (d) => new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const addDays = (d,n) => {const copy=new Date(d);copy.setDate(copy.getDate()+n);return copy;};
+  const sameDay = (a,b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+  function sharedSchedule(hass,member) {
+    const state=entity(hass,member,"training_schedule");
+    const raw=state&&state.attributes&&state.attributes.events;
+    return Array.isArray(raw)?raw.filter(item=>item&&typeof item==="object"&&item.start&&item.title&&Number.isFinite(asDate(item.start).getTime())):[];
+  }
+  function receivedWorkouts(hass,member) {
+    const s=entity(hass,member,"recent_workouts");
+    const raw=s&&s.attributes&&s.attributes.workouts;
+    if(!Array.isArray(raw))return [];
+    const ids=new Set();
+    return raw.slice(0,10).filter(item=>{
+      if(!item||typeof item!=="object")return false;
+      const id=String(item.id||[item.ended_at,item.name,item.type].join("|"));
+      if(ids.has(id))return false;
+      ids.add(id);return true;
+    });
+  }
+  function tomorrow(hass,member){
+    const now=dayStart(new Date()),tomorrowDate=addDays(now,1);
+    const label=tomorrowDate.toLocaleDateString("nb-NO",{weekday:"long",day:"numeric",month:"long"});
+    const schedule=sharedSchedule(hass,member)
+      .filter(item=>sameDay(asDate(item.start),tomorrowDate)&&item.status!=="skipped"&&item.status!=="completed")
+      .sort((a,b)=>asDate(a.start)-asDate(b.start));
+    const nextState=entity(hass,member,"next_workout");
+    const nextLabel=valueOf(nextState);
+    const nextTime=valueOf(entity(hass,member,"next_workout_time")) ||
+      (nextState&&nextState.attributes&&nextState.attributes.scheduled_at);
+    if(!schedule.length && nextLabel && nextTime && Number.isFinite(asDate(nextTime).getTime()) &&
+       sameDay(asDate(nextTime),tomorrowDate)) {
+      schedule.push({title:String(nextLabel),start:nextTime,type:""});
+    }
+    const rows=schedule.slice(0,4).map(item=>{
+      const at=asDate(item.start).toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit"});
+      const type=String(item.type||"").toLowerCase();
+      const kind=/strength|weight|lifting/.test(type)?"Styrke":/walk|hik/.test(type)?"Tur":/run|treadmill/.test(type)?"Løping":"Treningsøkt";
+      return '<div class="tomorrow-row"><span class="tomorrow-time">'+esc(at)+'</span><span class="tomorrow-info"><strong>'+esc(item.title)+'</strong><small>'+esc(kind)+'</small></span><span aria-hidden="true" class="tomorrow-arrow">↗</span></div>';
+    }).join("");
+    return card("I morgen",'<div class="tomorrow-feature"><div class="eyebrow">PLANLAGT TRENING</div><div class="tomorrow-date">'+esc(label)+'</div>'+
+      (rows||'<div class="tomorrow-empty">Ingen morgendagsøkt er delt fra ATHLTH ennå.</div>')+
+      '<div class="tomorrow-footer">'+(schedule.length?fmt(schedule.length)+" planlagt"+(schedule.length===1?" økt":"e økter"):
+      "Se treningsplanen i ATHLTH")+'</div></div>');
+  }
+  function trend(hass,member){
+    const records=receivedWorkouts(hass,member);
+    const end=dayStart(new Date()),start=addDays(end,-6),future=addDays(end,1);
+    const days=Array.from({length:7},(_,i)=>addDays(start,i));
+    const sums=days.map(()=>0),counts=days.map(()=>0);
+    let measured=0,missing=0;
+    for(const workout of records){
+      const date=asDate(workout.ended_at);
+      if(!Number.isFinite(date.getTime())||date<start||date>=future)continue;
+      const idx=days.findIndex(d=>sameDay(d,date));
+      if(idx<0)continue;
+      counts[idx]++;
+      const seconds=Number(workout.duration_seconds);
+      if(workout.duration_seconds!==null&&workout.duration_seconds!==undefined&&
+        Number.isFinite(seconds)&&seconds>=0){
+        sums[idx]+=seconds/60;measured++;
+      }else missing++;
+    }
+    const total=counts.reduce((a,b)=>a+b,0);
+    if(!total || !measured)return card("Aktivitet · 7 dager",
+      empty(total?"Mottatte økter mangler varighet.":"Ingen fullførte økter fra de siste syv dagene er mottatt.")+
+      '<p class="note">Grafen bruker kun økter mottatt av Home Assistant (maks ti lagret).</p>');
+    const max=Math.max(...sums,1);
+    const graph=days.map((d,i)=>{
+      const h=Math.max(0,Math.min(100,sums[i]/max*100));
+      const label=d.toLocaleDateString("nb-NO",{weekday:"short"}).replace(".","");
+      const title=label+": "+fmt(sums[i])+" min fra "+fmt(counts[i])+" mottatte økter";
+      return '<div class="trend-col" title="'+esc(title)+'"><div class="trend-track">'+
+        (sums[i]>0?'<div class="trend-bar" style="height:'+h.toFixed(2)+'%"></div>':'')+
+        '</div><span>'+esc(label)+'</span></div>';
+    }).join("");
+    const totalMinutes=sums.reduce((a,b)=>a+b,0);
+    return card("Aktivitet · 7 dager",
+      '<div class="trend-header"><div><div class="trend-total">'+fmt(totalMinutes)+'<small> min</small></div><div class="muted">Registrert varighet i mottatte økter</div></div>'+
+      '<div class="trend-count">'+fmt(total)+' økter</div></div>'+
+      '<div class="trend-chart" role="img" aria-label="'+esc("Mottatt varighet siste syv dager: "+days.map((d,i)=>d.toLocaleDateString("nb-NO",{weekday:"short"})+" "+fmt(sums[i])+" minutter").join(", "))+'">'+graph+'</div>'+
+      '<p class="note">'+(missing?"Varighet mangler for "+fmt(missing)+" økt(er). ":"")+
+      'Utvalg: maks ti mottatte økter, ikke komplett ATHLTH-historikk.</p>');
+  }
+  function workoutMix(hass,member){
+    const records=receivedWorkouts(hass,member);
+    if(!records.length)return card("Treningsmiks",empty("Fordelingen vises når fullførte økter er mottatt."));
+    const types=[
+      {label:"Løping / ute",color:"#c7955f",count:0},
+      {label:"Styrke",color:"#577b78",count:0},
+      {label:"Innendørs",color:"#aaa29a",count:0},
+      {label:"Annet",color:"#d7d9d8",count:0}
+    ];
+    for(const item of records){
+      const kind=String(item.type||"").toLowerCase();
+      const index=/strength|weight|lifting|functional/.test(kind)?1:
+        /treadmill|indoor/.test(kind)?2:
+        /run|walk|hik|trail|cycl|bike|outdoor/.test(kind)?0:3;
+      types[index].count++;
+    }
+    const total=records.length;
+    const a=100*types[0].count/total,b=a+100*types[1].count/total,c=b+100*types[2].count/total;
+    const ring='<div class="mix-ring" role="img" aria-label="'+esc(types.map(x=>x.label+": "+x.count+" økter").join(", "))+
+      '" style="--mix-a:'+a.toFixed(2)+'%;--mix-b:'+b.toFixed(2)+'%;--mix-c:'+c.toFixed(2)+'%">'+
+      '<div class="mix-core"><strong>'+fmt(total)+'</strong><span>mottatt</span></div></div>';
+    const legend=types.filter(t=>t.count>0).map(t=>'<div class="mix-row"><i style="background:'+t.color+'"></i><span>'+esc(t.label)+'</span><strong>'+fmt(100*t.count/total)+'%</strong></div>').join("");
+    return card("Treningsmiks",'<div class="mix-layout">'+ring+'<div class="mix-legend">'+legend+'</div></div>'+
+      '<p class="note">Basert på de siste '+fmt(total)+' mottatte øktene, ikke all trening.</p>');
+  }
+  function rhythm(hass,member){
+    const schedule=sharedSchedule(hass,member);
+    if(!schedule.length)return card("Ukerytme",empty("Del treningskalenderen for å se fordelingen gjennom uken."));
+    const monday=dayStart(new Date());monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
+    const weekdays=["M","T","O","T","F","L","S"];
+    let total=0,done=0;
+    const blocks=weekdays.map((label,i)=>{
+      const date=addDays(monday,i);
+      const activities=schedule.filter(s=>sameDay(asDate(s.start),date));
+      const completed=activities.filter(e=>e.status==="completed").length;
+      const skipped=activities.filter(e=>e.status==="skipped").length;
+      const planned=activities.filter(e=>e.status!=="completed"&&e.status!=="skipped").length;
+      total+=activities.length;done+=completed;
+      const type=completed?"completed":planned?"planned":skipped?"skipped":"rest";
+      const count=activities.length?activities.length:"·";
+      return '<div class="rhythm-day"><span class="rhythm-dayletter">'+label+'</span>'+
+        '<div class="rhythm-cell '+type+(sameDay(date,new Date())?" is-today":"")+'" title="'+esc(date.toLocaleDateString("nb-NO")+
+        ": "+completed+" fullført, "+planned+" planlagt, "+skipped+" hoppet over")+'">'+
+        esc(count)+'</div></div>';
+    }).join("");
+    return card("Ukerytme",'<div class="rhythm-header"><div class="rhythm-big">'+fmt(done)+' <span>/ '+fmt(total)+'</span></div>'+
+      '<div class="muted">fullførte av kalenderførte økter</div></div>'+
+      '<div class="rhythm-grid" role="group" aria-label="Treningskalenderens daglige status">'+blocks+'</div>'+
+      '<div class="rhythm-key"><span><i class="key-completed"></i> Fullført</span><span><i class="key-planned"></i> Planlagt</span><span><i class="key-skipped"></i> Hoppet over</span></div>'+
+      '<p class="note">Kun mottatte kalenderoppføringer. Uregistrerte økter er ikke med.</p>');
+  }
+  function insights(hass,member){
+    const stats=weeklyPlanStats(hass,member);
+    const recovery=num(entity(hass,member,"recovery_score"));
+    const load=num(entity(hass,member,"training_load"));
+    const recent=receivedWorkouts(hass,member);
+    const lines=[];
+    if(stats) lines.push(["01","Planen denne uken",fmt(stats.completed)+" av "+fmt(stats.total)+" planlagte økter er merket fullført."]);
+    else lines.push(["01","Ukefremdrift","Del treningskalenderen for å se fullført mot planlagt, uten å telle ekstraøkter som planlagte."]);
+    if(recovery!==null)lines.push(["02","Dagens restitusjon","Siste delte dagsform er "+fmt(recovery)+" %. Én måling viser ikke en langsiktig trend."]);
+    else if(load!==null)lines.push(["02","Treningsbelastning","Siste rapporterte treningsbelastning er "+fmt(load,1)+". Sammenlign med dagsform når den er delt."]);
+    else lines.push(["02","Restitusjon og belastning","Aktiver ønsket helsedeling i ATHLTH for å få verdier i oversikten."]);
+    lines.push(["03","Datagrunnlag",recent.length?
+      "Grafer for historiske økter bygger på "+fmt(recent.length)+" nylig mottatte økter, og er ikke en komplett historikk.":
+      "Ingen fullførte økter er mottatt i historikken ennå. Trendtolkning er derfor begrenset."]);
+    return card("Treningsinnsikt",'<div class="insight-intro">Forstå tallene, ikke bare se dem.</div>'+
+      lines.map(row=>'<div class="insight-row"><span>'+row[0]+'</span><div><strong>'+esc(row[1])+'</strong><p>'+esc(row[2])+'</p></div></div>').join(""));
+  }
+
   const CSS = [
     ':host{display:block;--ath-gold:',GOLD,';--ath-text:var(--primary-text-color,#151519);--ath-muted:var(--secondary-text-color,#7d7d84);color:var(--ath-text);font-family:inherit}',
     'ha-card{display:block;background:var(--card-background-color,#fff);border:1px solid var(--divider-color,rgba(0,0,0,.08));border-radius:22px;box-shadow:0 8px 26px rgba(0,0,0,.035);overflow:hidden;color:var(--ath-text)}',
@@ -623,6 +814,11 @@
           "athlth-strength-card":()=>strength(this._hass,member),
           "athlth-history-card":()=>history(this._hass,member),
           "athlth-status-card":()=>statusCard(this._hass,member),
+          "athlth-tomorrow-card":()=>tomorrow(this._hass,member),
+          "athlth-trend-card":()=>trend(this._hass,member),
+          "athlth-mix-card":()=>workoutMix(this._hass,member),
+          "athlth-rhythm-card":()=>rhythm(this._hass,member),
+          "athlth-insight-card":()=>insights(this._hass,member),
           "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected)
         };
         this._root.innerHTML="<style>"+CSS+"</style>"+builders[kind]();
