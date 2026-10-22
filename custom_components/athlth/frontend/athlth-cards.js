@@ -671,7 +671,7 @@
       '<p class="note">Aktiver «Treningshistorikk · 90 dager» i ATHLTH → Home Assistant. Ingen GPS-ruter eksporteres.</p>');
     const until=dayStart(new Date()),since=addDays(until,-range+1);
     const counts=Array.from({length:Math.ceil(range/7)},()=>({minutes:0,sessions:0,km:0,seen:0}));
-    let total=0,minutes=0,km=0;
+    let total=0,minutes=0,km=0,measuredDistance=0;
     for(const r of records){
       if(!r||typeof r.date!=="string")continue;
       const day=asDate(r.date+"T12:00:00");
@@ -683,7 +683,9 @@
       counts[idx].minutes+=mins;counts[idx].sessions+=sessions;counts[idx].seen++;
       if(Number.isFinite(dist)&&dist>=0)counts[idx].km+=dist;
       total+=sessions;minutes+=mins;
-      if(Number.isFinite(dist)&&dist>=0)km+=dist;
+      if(Number.isFinite(dist)&&dist>=0 && Number(r.distance_entries)>0){
+        km+=dist;measuredDistance+=Number(r.distance_entries);
+      }
     }
     const max=Math.max(1,...counts.map(b=>b.minutes));
     const graph=counts.map((v,i)=>{
@@ -696,7 +698,7 @@
       '<div class="long-summary">'+
       '<div class="long-stat"><strong>'+fmt(total)+'</strong><span>økter</span></div>'+
       '<div class="long-stat"><strong>'+fmt(minutes)+'</strong><span>minutter</span></div>'+
-      '<div class="long-stat"><strong>'+fmt(km,1)+'</strong><span>km fra Health</span></div>'+label+'</div>'+
+      '<div class="long-stat"><strong>'+(measuredDistance?fmt(km,1):"—")+'</strong><span>km fra Health</span></div>'+label+'</div>'+
       '<div class="long-chart" role="img" aria-label="'+esc("Treningsminutter per uke fra delte Apple Health-sammendrag siste "+range+" dager")+'">'+graph+'</div>'+
       '<p class="note">Kilde: Apple Health. Maks 90 økter, ikke nødvendigvis all trening. Distanse kan være målt, beregnet eller manuelt registrert; opphav er ikke verifisert.</p>');
   }
