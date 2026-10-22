@@ -222,8 +222,9 @@
       /^\/api\/camera_proxy\/[a-z0-9_.-]+(?:\?|$)/i.test(picture);
     // HA camera images commonly require a short-lived access token. Prefer
     // Home Assistant's signed entity_picture when one is provided.
+    const routeId=route&&route.entity_id || memberKey(member).replace(/^sensor\./,"camera.").replace(/last_workout$/,"last_workout_route");
     const mapUrl=match?(safePicture?picture:
-      "/api/camera_proxy/"+encodeURIComponent(route.entity_id)+
+      "/api/camera_proxy/"+encodeURIComponent(routeId)+
       (typeof token==="string"&&token?"?token="+encodeURIComponent(token):"")):"";
     const visual=match?
       '<div class="route-visual route-map">'+
