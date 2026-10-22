@@ -1,0 +1,60 @@
+# ATHLTH iPad / Kiosk – full width WITH Home Assistant left sidebar.
+#
+# Create a *new, user-managed* Home Assistant dashboard, choose "Show in
+# sidebar" when creating it, and paste this into its raw YAML editor.
+# This is a separate dashboard. It does not overwrite your existing view.
+#
+# IMPORTANT: The user requested the LEFT SIDEBAR to remain visible.
+# Therefore we deliberately do NOT use kiosk_mode: kiosk: true,
+# hide_sidebar: true, or hide_header: true. The ATHLTH "kiosk: true"
+# card option only changes the ATHLTH card's internal appearance; it does
+# not hide or modify the Home Assistant application shell.
+#
+# The left sidebar may collapse when iPadOS uses a narrow window or
+# Split View. Reopen it using the Home Assistant sidebar/menu control.
+# Home Assistant controls that behavior, not the ATHLTH custom card.
+#
+# Home Assistant Kiosk Mode is OPTIONAL. If installed as a separate HACS
+# frontend plugin, keep hide_sidebar: false and hide_header: false.
+# No plugin is needed for the ATHLTH kiosk card.
+#
+# "panel: true" = ONE outer ATHLTH card using the full space next to the
+# HA sidebar. The ATHLTH card internally renders multiple rows of cards:
+# roughly 3 columns on wide iPads, 2 or 1 on smaller available widths.
+#
+# After changing the dashboard: ensure the ATHLTH frontend resource is
+# loaded, restart HA after updating ATHLTH_HA, then reopen the iPad app
+# to refresh its cached frontend bundle.
+
+title: ATHLTH Kiosk
+views:
+  - title: Treningsoversikt
+    path: oversikt
+    icon: mdi:view-dashboard-outline
+    panel: true
+    cards:
+      - type: custom:athlth-dashboard-card
+        kiosk: true
+        members:
+          - name: Min trening
+            entity: sensor.athlth_last_workout
+
+  # Optional second view: dedicated, simpler detail cards for checking a
+  # specific number without turning the main iPad overview into a form.
+  - title: Detaljer
+    path: detaljer
+    icon: mdi:chart-timeline-variant
+    cards:
+      - type: custom:athlth-last-card
+        entity: sensor.athlth_last_workout
+      - type: custom:athlth-feed-card
+        entity: sensor.athlth_last_workout
+      - type: custom:athlth-records-card
+        entity: sensor.athlth_last_workout
+      - type: custom:athlth-week-card
+        entity: sensor.athlth_last_workout
+      - type: custom:athlth-data-card
+        entity: sensor.athlth_last_workout
+
+# For multiple family members add individual "members" entries with the
+# exact real last_workout entity IDs. Only shared data appears.
