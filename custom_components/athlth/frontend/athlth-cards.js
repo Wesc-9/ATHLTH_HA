@@ -27,7 +27,10 @@
     "athlth-trend-card": ["ATHLTH Aktivitetstrend", "Syv dagers mottatt treningsvarighet."],
     "athlth-mix-card": ["ATHLTH Treningsmiks", "Fordeling av øktkategorier i mottatt historikk."],
     "athlth-rhythm-card": ["ATHLTH Ukerytme", "Visuell ukerytme fra treningskalenderen."],
-    "athlth-insight-card": ["ATHLTH Treningsinnsikt", "Forklarende innsikt fra faktisk delte verdier."]
+    "athlth-insight-card": ["ATHLTH Treningsinnsikt", "Forklarende innsikt fra faktisk delte verdier."],
+    "athlth-feed-card": ["ATHLTH Øktlogg", "De siste fullførte øktene som Home Assistant har mottatt."],
+    "athlth-records-card": ["ATHLTH Prestasjoner", "Delte personlige rekorder fra ATHLTH."],
+    "athlth-data-card": ["ATHLTH Datagrunnlag", "Hva er tilgjengelig for analyser og hva mangler."]
   };
   const SUFFIX = {
     presence: "presence",
@@ -62,7 +65,9 @@
     current_weight_kg: "current_weight_kg",
     current_rest_seconds: "current_rest_seconds",
     goal_progress: "goal_progress",
-    training_streak: "training_streak"
+    training_streak: "training_streak",
+    athlete_profile: "athlete_profile",
+    performance_records: "performance_records"
   };
   const DOMAINS = {workout_active:"binary_sensor",last_workout_route:"camera"};
   const esc = (value) => String(value === null || value === undefined ? "" : value)
@@ -417,6 +422,106 @@
     }).join("");
     return card("Familiens trening",summary+(items||empty("Ingen familiemedlemmer valgt.")));
   }
+
+  function safeAthleteImage(raw){
+    if(typeof raw!=="string"||raw.length>512)return null;
+    try{
+      const parsed=new URL(raw);
+      if(parsed.protocol!=="https:" || !parsed.hostname.endsWith(".supabase.co") ||
+         !parsed.pathname.startsWith("/storage/v1/object/public/profile-avatars/") ||
+         parsed.username||parsed.password || parsed.port && parsed.port!=="443" || parsed.hash)return null;
+      return parsed.href;
+    }catch(_){return null;}
+  }
+  function athleteIdentity(hass,member){
+    const profile=entity(hass,member,"athlete_profile");
+    const display=valueOf(profile);
+    const photo=profile&&profile.attributes&&profile.attributes.avatar_url;
+    return {name:typeof display==="string"&&display.trim()?display.trim():
+        (member.name&&member.name!=="Min trening"?member.name:"Din trening"),
+      avatar:safeAthleteImage(photo)};
+  }
+  function activityFeed(hass,member){
+    const recent=receivedWorkouts(hass,member)
+      .filter(x=>Number.isFinite(asDate(x.ended_at).getTime()))
+      .sort((a,b)=>asDate(b.ended_at)-asDate(a.ended_at));
+    if(!recent.length)return card("Siste økter",empty("Ingen fullførte økter er mottatt fra ATHLTH ennå.")+
+      '<p class="note">Aktiver deling av fullførte økter i ATHLTH. Eldre historikk tilbakefylles ikke automatisk.</p>');
+    const limit=8;
+    const entries=recent.slice(0,limit).map((workout,index)=>{
+      const kind=String(workout.type||"").toLowerCase();
+      const isStrength=/strength|weight|lifting|functional/.test(kind);
+      const isIndoor=!isStrength&&/indoor|treadmill/.test(kind);
+      const label=isStrength?"Styrke":isIndoor?"Innendørs":/run|outdoor|walk|hik|cycling/.test(kind)?"Utendørs":"Aktivitet";
+      const symbol=isStrength?"✦":isIndoor?"▥":"↗";
+      const seconds=workout.duration_seconds;
+      const meters=workout.distance_meters;
+      const bpm=workout.average_heart_rate_bpm;
+      const bits=[];
+      const nsec=seconds==null?NaN:Number(seconds);
+      const ndist=meters==null?NaN:Number(meters);
+      const nhr=bpm==null?NaN:Number(bpm);
+      if(Number.isFinite(nsec)&&nsec>=0)bits.push(duration(nsec));
+      if(!isStrength&&Number.isFinite(ndist)&&ndist>0)bits.push(fmt(ndist/1000,2)+" km");
+      if(Number.isFinite(nhr)&&nhr>0)bits.push(fmt(nhr)+" bpm");
+      const at=niceDate(workout.ended_at)||"Registrert";
+      const source=typeof workout.device==="string"&&workout.device?workout.device:null;
+      return '<div class="feed-entry"><div class="feed-icon '+(isStrength?"strength":"run")+'" aria-hidden="true">'+symbol+'</div>'+
+        '<div class="feed-main"><div class="feed-name">'+esc(workout.name||"Treningsøkt")+'</div>'+
+        '<div class="feed-meta">'+esc(at)+' · '+esc(label)+'</div>'+
+        (bits.length?'<div class="feed-metrics">'+bits.map(b=>'<span>'+esc(b)+'</span>').join("")+'</div>':"")+
+        '</div><div class="feed-right">'+(index===0?'<span class="feed-new">NYESTE</span>':"")+
+        (source?'<span class="feed-source">'+esc(source)+'</span>':"")+'</div></div>';
+    }).join("");
+    return card("Siste økter",'<div class="feed-header"><div class="feed-count">'+fmt(recent.length)+' <span>mottatte økter</span></div>'+
+      '<span class="feed-range">Siste fullførte først</span></div>'+
+      '<div class="feed-list">'+entries+'</div>'+
+      '<p class="note">Viser opptil '+fmt(limit)+' av maks ti mottatte økter. Dette er ikke hele treningsarkivet.</p>');
+  }
+  function performance(hass,member){
+    const sensor=entity(hass,member,"performance_records");
+    const raw=sensor&&sensor.attributes&&sensor.attributes.records;
+    const records=Array.isArray(raw)?raw.filter(x=>x&&x.title&&x.value&&Number.isFinite(asDate(x.date).getTime())).slice(0,12):[];
+    if(!records.length)return card("Prestasjoner",empty("Ingen personlige rekorder er delt med Home Assistant.")+
+      '<p class="note">Aktiver «PR-er og milepæler» i ATHLTH for å dele opptil 12 løpe- og styrkerekorder.</p>');
+    const first=[...records].sort((a,b)=>asDate(b.date)-asDate(a.date)).slice(0,6);
+    const tiles=first.map(rec=>{
+      const kind=rec.category==="strength"?"STYRKE":rec.category==="running"?"LØPING":"PERSONLIG REKORD";
+      return '<div class="record-tile"><span class="record-category">'+esc(kind)+'</span>'+
+        '<div class="record-value">'+esc(rec.value)+'</div>'+
+        '<strong>'+esc(rec.title)+'</strong>'+
+        '<span class="record-date">'+esc(niceDate(rec.date)||"")+'</span></div>';
+    }).join("");
+    const source=sensor&&sensor.attributes&&sensor.attributes.source;
+    const label=source==="ATHLTH snapshot"?"Delte rekorder fra ATHLTH":
+      "Nye PR-hendelser mottatt i Home Assistant";
+    return card("Prestasjoner",
+      '<div class="record-head"><div class="record-badge">PERSONLIGE REKORDER</div>'+
+      '<span class="record-context">'+esc(label)+'</span></div>'+
+      '<div class="record-grid">'+tiles+'</div>'+
+      '<p class="note">Ingen plasseringer eller prestasjoner beregnes uten faktiske rekorddata.</p>');
+  }
+  function dataFoundation(hass,member){
+    const available=[
+      ["Treningsuke",num(entity(hass,member,"weekly_training_minutes"))!==null],
+      ["Treningsplan",!!valueOf(entity(hass,member,"training_plan"))],
+      ["Restitusjon",num(entity(hass,member,"recovery_score"))!==null],
+      ["Økthistorikk",receivedWorkouts(hass,member).length>0],
+      ["Prestasjoner",!!(entity(hass,member,"performance_records")&&
+         Number(valueOf(entity(hass,member,"performance_records")))>0)],
+      ["Rutekart",!!(entity(hass,member,"last_workout_route")&&
+         usable(entity(hass,member,"last_workout_route")))]
+    ];
+    const received=available.filter(([_,ok])=>ok).length;
+    const list=available.map(([name,ok])=>'<div class="data-line"><span class="data-dot '+(ok?"on":"off")+'"></span>'+
+      '<span>'+esc(name)+'</span><strong>'+(ok?"Tilgjengelig":"Ikke delt")+'</strong></div>').join("");
+    return card("Datagrunnlaget",
+      '<div class="data-coverage"><strong>'+fmt(received)+' / '+fmt(available.length)+'</strong>'+
+      '<span>datakategorier tilgjengelige</span></div>'+list+
+      '<p class="note">Viser delte kategorier, ikke datakvalitet eller helsetilstand. Sist synkronisert angir når appen sist kontaktet Home Assistant.</p>'+
+      lastSync(hass,member));
+  }
+
   function dashboard(hass,members,selected) {
     const member=members[selected]||members[0];
     const now=new Date();
@@ -428,12 +533,17 @@
     const planStats=weeklyPlanStats(hass,member);
     const progress=planStats?planStats.percent:num(entity(hass,member,"weekly_progress"));
     const nextName=valueOf(entity(hass,member,"next_workout"));
-    const mainTitle=member.name&&member.name!=="Min trening"?member.name:"Din trening";
+    const identity=athleteIdentity(hass,member);
+    const mainTitle=identity.name;
     const signal=(k,v,u)=>'<div class="overview-signal"><span>'+esc(k)+'</span><strong>'+esc(v)+'</strong><small>'+esc(u)+'</small></div>';
     const hero='<section class="ath-hero" aria-label="Treningsoversikt">'+
       '<div class="hero-noise" aria-hidden="true"><span></span><span></span><span></span></div>'+
       '<div class="ath-hero-main"><div class="hero-overline">ATHLTH / TRAINING INTELLIGENCE · '+esc(dateline)+'</div>'+
-      '<h1>'+esc(mainTitle)+'<span>.</span></h1>'+
+      '<div class="hero-person">'+
+      (identity.avatar?'<img class="hero-avatar" loading="lazy" alt="Profilbilde for '+esc(mainTitle)+'" src="'+esc(identity.avatar)+'">':
+      '<span class="hero-avatar hero-avatar-empty" aria-hidden="true">'+esc(mainTitle.charAt(0).toLocaleUpperCase("nb-NO"))+'</span>')+
+      '<div><h1>'+esc(mainTitle)+'<span>.</span></h1>'+
+      '<div class="hero-subtitle">DIN PERSONLIGE TRENINGSPROFIL</div></div></div>'+
       '<p>Et tydeligere bilde av innsatsen, rytmen og veien videre.</p>'+
       '<div class="hero-next"><span class="hero-next-dot"></span><span>NESTE PLANLAGTE ØKT</span><strong>'+esc(nextName||"Ikke delt ennå")+'</strong></div></div>'+
       '<div class="hero-signals">'+signal("ØKTER DENNE UKEN",fmt(count),"registrert")+
@@ -458,10 +568,13 @@
       '<div>'+rhythm(hass,member)+'</div>'+
       '<div>'+workoutMix(hass,member)+'</div>'+
       '<div>'+recovery(hass,member)+'</div>'+
-      section("04","Forstå fremgangen","Hva som er kjent, og hva vi fortsatt trenger data for.")+
+      section("04","Resultater og prestasjoner","Øktene du har gjort og rekordene du har satt.")+
+      '<div class="span-2 feed-area">'+activityFeed(hass,member)+'</div>'+
+      '<div class="records-area">'+performance(hass,member)+'</div>'+
+      section("05","Forstå fremgangen","Hva som er kjent, og hva vi fortsatt trenger data for.")+
       '<div class="span-2 insight-area">'+insights(hass,member)+'</div>'+
       '<div>'+goals(hass,member)+'</div>'+
-      '<div class="span-2">'+history(hass,member)+'</div>'+
+      '<div class="span-2">'+dataFoundation(hass,member)+'</div>'+
       '<div>'+(live?active(hass,member):statusCard(hass,member))+'</div>'+
       (members.length>1?'<div class="span-3">'+family(hass,members)+'</div>':"")+
       '</div>';
@@ -837,6 +950,9 @@
           "athlth-mix-card":()=>workoutMix(this._hass,member),
           "athlth-rhythm-card":()=>rhythm(this._hass,member),
           "athlth-insight-card":()=>insights(this._hass,member),
+          "athlth-feed-card":()=>activityFeed(this._hass,member),
+          "athlth-records-card":()=>performance(this._hass,member),
+          "athlth-data-card":()=>dataFoundation(this._hass,member),
           "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected)
         };
         this._root.innerHTML="<style>"+CSS+"</style>"+builders[kind]();
