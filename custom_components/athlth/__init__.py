@@ -139,6 +139,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         primary_state["recent_workouts"] = [
             item for item in saved_primary_workouts[:10] if isinstance(item, dict)
         ]
+    primary_identity = stored_clients_data.get("primary_identity")
+    if isinstance(primary_identity, dict):
+        for key in ("athlete_display_name", "athlete_avatar_url"):
+            value = primary_identity.get(key)
+            if isinstance(value, str):
+                primary_state[key] = value
+    for stored_key, state_key, max_count in (
+        ("primary_performance_records", "performance_records", 12),
+        ("primary_received_personal_records", "received_personal_records", 10),
+    ):
+        values = stored_clients_data.get(stored_key)
+        if isinstance(values, list):
+            primary_state[state_key] = [
+                item for item in values[:max_count] if isinstance(item, dict)
+            ]
     if isinstance(raw_primary_calendar_events, list):
         primary_state["calendar_events"] = raw_primary_calendar_events
     saved_primary_plan = stored_clients_data.get("primary_training_plan")
@@ -217,6 +232,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 additional_state["recent_workouts"] = [
                     item for item in saved_workouts[:10] if isinstance(item, dict)
                 ]
+            identity = raw_client.get("identity")
+            if isinstance(identity, dict):
+                for key in ("athlete_display_name", "athlete_avatar_url"):
+                    value = identity.get(key)
+                    if isinstance(value, str):
+                        additional_state[key] = value
+            for state_key, max_count in (
+                ("performance_records", 12),
+                ("received_personal_records", 10),
+            ):
+                values = raw_client.get(state_key)
+                if isinstance(values, list):
+                    additional_state[state_key] = [
+                        item for item in values[:max_count] if isinstance(item, dict)
+                    ]
             if isinstance(raw_calendar_events, list):
                 additional_state["calendar_events"] = raw_calendar_events
             saved_plan = raw_client.get("training_plan")
