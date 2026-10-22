@@ -682,7 +682,7 @@ test("30/90-day chart uses ONLY Apple Health summary days and shows provenance",
   const normal=card("athlth-long-trend-card",{}, {states});
   assert.match(normal,/30 dager/);
   assert.match(normal,/90 dager/);
-  assert.match(normal,/3[0-9]*<\/strong>/);
+  assert.match(normal,/>2<\/strong><span>økter<\/span>/);
   assert.match(normal,/Kilde: Apple Health/);
   assert.match(normal,/manuelt registrert/);
   assert.doesNotMatch(normal,/22:01/);
