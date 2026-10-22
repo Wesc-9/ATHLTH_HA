@@ -143,7 +143,6 @@ async def async_handle_webhook(
                 "server_time": now,
                 "commands": client.pending_commands,
                 "capabilities": sorted(SUPPORTED_EVENTS),
-            "features": ["profile_performance_snapshot_v1"],
                 "features": ["profile_performance_snapshot_v1"],
             },
             headers={"Cache-Control": "no-store"},
