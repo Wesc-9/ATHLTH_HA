@@ -568,3 +568,68 @@ test("bad workout and performance titles cannot inject HTML",()=>{
   assert.match(html,/&lt;script&gt;/);
   assert.match(html,/&lt;svg/);
 });
+
+
+test("the iPad dashboard declares full-width Home Assistant Sections placement",()=>{
+  const Card=registry.get("athlth-dashboard-card");
+  const component=new Card();
+  assert.deepEqual(component.getGridOptions(),{columns:12,rows:"auto"});
+  assert.match(card("athlth-dashboard-card",{}, {states:first}),/@container \(min-width:790px\)/);
+  assert.match(card("athlth-dashboard-card",{}, {states:first}),/repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(card("athlth-dashboard-card",{}, {states:first}),/@container \(min-width:620px\) and \(max-width:789px\)/);
+});
+
+test("unrelated Home Assistant sensor updates do not overwrite scroll DOM",()=>{
+  const Card=registry.get("athlth-dashboard-card");
+  const component=new Card();
+  component.setConfig({type:"custom:athlth-dashboard-card"});
+  let writes=0;
+  const mockRoot={
+    _html:"",
+    addEventListener(){},
+    set innerHTML(value){writes++;this._html=value;},
+    get innerHTML(){return this._html;}
+  };
+  component._root=mockRoot;
+  component.hass={states:first};
+  assert.equal(writes,1);
+  component.hass={states:{...first,"sensor.weather_outdoor":state("Rain")}};
+  assert.equal(writes,1,"Unrelated updates should not reset the entire dashboard DOM");
+});
+
+test("updated ATHLTH sensors patch in place without replacing existing scroll nodes",()=>{
+  const Card=registry.get("athlth-dashboard-card");
+  const component=new Card();
+  component.setConfig({type:"custom:athlth-dashboard-card"});
+  const realDocument=globalThis.document;
+  let fullRootWrites=0;
+  const preservedText={nodeType:3,nodeValue:""};
+  const root={
+    childNodes:[preservedText],
+    addEventListener(){},
+    set innerHTML(value){fullRootWrites++;preservedText.nodeValue=value;},
+    get innerHTML(){return this.childNodes.map(n=>n.nodeValue).join("");}
+  };
+  globalThis.document={
+    createElement(tag){
+      assert.equal(tag,"template");
+      return {
+        content:{childNodes:[{nodeType:3,nodeValue:""}]},
+        set innerHTML(value){this.content.childNodes[0].nodeValue=value;}
+      };
+    }
+  };
+  try{
+    component._root=root;
+    component.hass={states:first};
+    assert.equal(fullRootWrites,1);
+    const oldText=preservedText.nodeValue;
+    component.hass={states:{...first,"sensor.athlth_weekly_progress":state("90")}};
+    assert.equal(fullRootWrites,1,"An ATHLTH change should patch, not replace, the scroll tree");
+    assert.strictEqual(root.childNodes[0],preservedText);
+    assert.notEqual(preservedText.nodeValue,oldText);
+    assert.match(preservedText.nodeValue,/90%/);
+  }finally{
+    globalThis.document=realDocument;
+  }
+});
