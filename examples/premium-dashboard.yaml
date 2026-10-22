@@ -1,5 +1,7 @@
 # ATHLTH premium dashboard – entire dashboard in one configurable card.
 # Choose a new dashboard in Home Assistant (manual YAML).
+# Use a PANEL view for this combined card; placing it inside a masonry column
+# constrains its width and will prevent the three-column desktop layout.
 # There is no demo data: every value comes from the connected ATHLTH devices.
 # Each optional member must consent to sharing in their own ATHLTH app.
 #
@@ -20,6 +22,9 @@ views:
   - title: ATHLTH
     path: athlth
     icon: mdi:run-fast
+    # Panel lets the bundled card use the full screen. Its internal grid
+    # becomes 3 columns on desktop, 2 on tablet and 1 on mobile.
+    panel: true
     cards:
       - type: custom:athlth-dashboard-card
         members:
