@@ -2,6 +2,14 @@
 # Choose a new dashboard in Home Assistant (manual YAML).
 # Use a PANEL view for this combined card; placing it inside a masonry column
 # constrains its width and will prevent the three-column desktop layout.
+# Home Assistant iPad app: if you only see one card across, the first view is
+# likely configured as default Masonry rather than Panel. Edit the ATHLTH view
+# and select Panel (one card), or use Sections with a 12-column-wide ATHLTH
+# dashboard card. Panel layout is separate from the card's internal grid.
+# Scroll position is preserved during incoming HA entity updates in v0.5.1.
+# 3 columns require about 790 CSS pixels of real card width; 620-789 gets 2.
+# Narrow/split-screen iPad windows intentionally get 1 column.
+
 # There is no demo data: every value comes from the connected ATHLTH devices.
 # The four sections are rendered within one full-width dashboard card:
 # NOW/NEXT, TRAINING FOUNDATION, PATTERNS, TRAINING INSIGHTS.
