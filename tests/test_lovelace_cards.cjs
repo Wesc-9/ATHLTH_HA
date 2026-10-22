@@ -343,7 +343,7 @@ test("desktop dashboard has a three-column layout and a featured latest workout"
   assert.match(html,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(html,/class="feature-card span-2"/);
   assert.match(html,/class="last-workout-layout"/);
-  assert.match(html,/Oversikt som motiverer/);
+  assert.match(html,/TRAINING INTELLIGENCE/);
   assert.match(html,/class="week-card"/);
 });
 
