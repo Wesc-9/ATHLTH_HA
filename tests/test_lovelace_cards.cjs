@@ -50,7 +50,7 @@ const second={
 };
 
 test("all premium ATHLTH cards register once",()=>{
-  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status","tomorrow","trend","mix","rhythm","insight","feed","records","data","long-trend"];
+  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status","tomorrow","trend","mix","rhythm","insight","feed","records","data","long-trend","strength-progress"];
   for(const name of names)assert.ok(registry.has("athlth-"+name+"-card"),name);
   assert.equal(window.customCards.length,names.length);
 });
@@ -712,4 +712,63 @@ test("history chart does not invent a trend when opt-in sync is absent",()=>{
   const html=card("athlth-long-trend-card",{}, {states:first});
   assert.match(html,/Historiske øktsammendrag er ikke delt/);
   assert.doesNotMatch(html,/100 økter/);
+});
+
+
+test("completed-set strength progression groups exact exercise and repetitions",()=>{
+  const date1=new Date(Date.now()-8*86400000).toISOString();
+  const date2=new Date(Date.now()-2*86400000).toISOString();
+  const records=[
+    {exercise:"Knebøy",reps:5,weight_kg:80,ended_at:date1,source:"completed_strength_set"},
+    {exercise:"Knebøy",reps:5,weight_kg:85,ended_at:date2,source:"completed_strength_set"},
+    {exercise:"Knebøy",reps:10,weight_kg:50,ended_at:date2,source:"completed_strength_set"},
+    {exercise:"Benkpress",reps:5,weight_kg:65,ended_at:date2,source:"completed_strength_set"}
+  ];
+  const states={...first,"sensor.athlth_strength_progress":state("4",{records})};
+  const html=card("athlth-strength-progress-card",{}, {states});
+  assert.match(html,/Knebøy/);
+  assert.match(html,/Benkpress/);
+  assert.match(html,/5 reps/);
+  assert.match(html,/data-athlth-strength-group/);
+  assert.match(html,/Høyest i delte økter/);
+  assert.match(html,/Kun samme øvelse og repetisjonstall sammenlignes/);
+  assert.match(html,/Ikke en bekreftet all-time PR/);
+});
+
+test("unshared strength history does not invent performance",()=>{
+  const html=card("athlth-strength-progress-card",{}, {states:first});
+  assert.match(html,/Ingen bekreftede arbeidssett er delt/);
+  assert.doesNotMatch(html,/85 kg/);
+});
+
+test("strength progression excludes unverified, incomplete or forged source entries",()=>{
+  const now=new Date().toISOString();
+  const states={...first,"sensor.athlth_strength_progress":state("4",{records:[
+    {exercise:"Misleading",reps:5,weight_kg:800,ended_at:now,source:"planned_set"},
+    {exercise:"Not Done",reps:5,weight_kg:700,ended_at:now,source:"incomplete_set"},
+    {exercise:"<img src=x onerror=1>",reps:5,weight_kg:50,ended_at:now,source:"completed_strength_set"}
+  ]})};
+  const html=card("athlth-strength-progress-card",{}, {states});
+  assert.doesNotMatch(html,/Misleading|Not Done|<img src=x/);
+  assert.match(html,/&lt;img src=x onerror=1&gt;/);
+  assert.doesNotMatch(html,/800 kg/);
+});
+
+test("strength exercise selector updates local card without resetting Home Assistant state",()=>{
+  const name="athlth-strength-progress-card";
+  const Custom=registry.get(name), component=new Custom();
+  const date=new Date().toISOString();
+  component.setConfig({type:"custom:"+name});
+  component.hass={states:{...first,"sensor.athlth_strength_progress":state("2",{records:[
+    {exercise:"Benkpress",reps:5,weight_kg:80,ended_at:date,source:"completed_strength_set"},
+    {exercise:"Knebøy",reps:8,weight_kg:90,ended_at:date,source:"completed_strength_set"}
+  ]})}};
+  let clicked;
+  component._root.addEventListener=(name,fn)=>{if(name==="click")clicked=fn;};
+  component.connectedCallback();
+  clicked({target:{closest(selector){return selector==="[data-athlth-strength-group]"?{
+    getAttribute(){return "1";}
+  }:null;}}});
+  assert.equal(component._strengthGroup,1);
+  assert.match(component._root.innerHTML,/aria-pressed="true"/);
 });
