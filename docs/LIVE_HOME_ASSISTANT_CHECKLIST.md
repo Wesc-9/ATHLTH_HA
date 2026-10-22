@@ -38,6 +38,30 @@ iPhone-, Apple Watch- og nettlesertestene.
   Test i mobilvisning og desktop, samt etter en helt fersk innlasting
   (uten tidligere nettlesercache).
 
+## Training Intelligence — visuelt dashboard
+
+- Bruk en **Panel-visning** med ett `custom:athlth-dashboard-card`.
+  Kontroller 3 kolonner på desktop (minst 940 px bred kortflate),
+  2 på middels bredde og 1 på mobil. Test også lange øktnavn.
+- Kontroller at bare dashboardheaderen bruker den store ATHLTH-logoen.
+  De små analytiske kortene skal ikke vise repeterte logoer.
+- Verifiser **I morgen** ved planlagt økt i morgen, flere økter samme
+  dag, ugyldig dato, tom kalender og avlyst/hoppet over økt.
+- Verifiser syvdagersgrafen med 0, 1 og flere mottatte fullførte
+  økter, manglende varighet og flere økter på samme dato.
+  Diagrammet må ikke presenteres som komplett historikk.
+- Kontroller treningsmiks for styrke, innendørs, løp og annet,
+  samt riktig ukerytme ved planlagt, fullført og hoppet over.
+- Test `Siste økt` med ekte utendørsrute, ingen rute, eldre rute
+  som ikke matcher, mølle og styrke. Kun korrekt utendørsøkt får kart.
+- Kontroller at utdypende treningsinnsikt ikke gir medisinske
+  konklusjoner eller oppdiktede trender, og at status per tilkoblet
+  ATHLTH-installasjon ikke lekkes mellom familiemedlemmer.
+- Kontroller kontrast, responsiv tekst, ring- og søylediagram
+  i mørkt/lyst Home Assistant-tema og med skjermleser.
+- Dashboardendringer er ikke en HACS-release før de er testet
+  i en faktisk installasjon med datadeling aktivert.
+
 ## Online / Trener nå / frakoblet
 
 - I ATHLTH på iPhone: koble til HA, aktiver **Online-status**.
