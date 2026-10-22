@@ -196,6 +196,9 @@ async def async_handle_webhook(
             and (
                 "calendar_events" in payload["state"]
                 or "training_plan" in payload["state"]
+                or "athlete_display_name" in payload["state"]
+                or "athlete_avatar_url" in payload["state"]
+                or "performance_records" in payload["state"]
                 or (
                     "last_workout" in payload["state"]
                     and payload["state"]["last_workout"] is None
