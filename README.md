@@ -199,6 +199,29 @@ integration, with no external CDN and no fake workout data.
 
 For a complete dashboard see [examples/premium-dashboard.yaml](examples/premium-dashboard.yaml).
 
+### ATHLTH 0.7.0 — completed-strength progression and precise exercise comparisons
+
+ATHLTH Training Intelligence now supports **actual logged completed
+working-set weights**, grouped by the same exercise **and exact rep count**.
+The new `custom:athlth-strength-progress-card` is available in the main
+training dashboard and the iPad Kiosk Detaljer view. Browse recorded weights
+across completed workouts and the best result **within the shared set**;
+this is not an independent sensor verification or an all-time PR.
+
+The ATHLTH iPhone app exports at most 60 best-set-per-workout points from
+90 days when the new **Styrkeprogresjon · fullførte sett** permission is
+enabled; it defaults to OFF. The signed protocol negotiates
+`strength_progress_v1` and respects independent consent withdrawal.
+App and Home Assistant must *both* support this version before data appears.
+
+This release also fixes the normal webhook's `workout_history_v1`
+feature negotiation (previously inconsistent in v0.6.0).
+**4×4 fastest intervals are intentionally not inferred from generic
+running workouts or target speed**; they need four completed actual work
+intervals and metric provenance. See
+[v0.7.0 release notes](docs/releases/v0.7.0.md) and
+[the performance progression analysis](docs/PERFORMANCE_PROGRESSION_0_6_1.md).
+
 ### ATHLTH 0.6.0 — 30/90-day Apple Health training history
 
 **Explicit opt-in, no GPS:** Version 0.6.0 adds bounded, signed retrospective
