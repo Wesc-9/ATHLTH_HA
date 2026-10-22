@@ -199,6 +199,37 @@ integration, with no external CDN and no fake workout data.
 
 For a complete dashboard see [examples/premium-dashboard.yaml](examples/premium-dashboard.yaml).
 
+### ATHLTH 0.6.0 — 30/90-day Apple Health training history
+
+**Explicit opt-in, no GPS:** Version 0.6.0 adds bounded, signed retrospective
+HealthKit summaries to ATHLTH Training Intelligence. The new
+`custom:athlth-long-trend-card` is included both in the full dashboard
+and the iPad kiosk **Detaljer** view. It compares 30/90-day workout count,
+training minutes and HealthKit distance using actual shared calendar-day
+summaries, never invented route or split data.
+
+The ATHLTH iPhone source exposes a **Treningshistorikk · 90 dager** toggle,
+OFF by default. Both that and **Fullførte økter** must be enabled to sync.
+Up to 90 workouts from the last 90 days are selected, with a signed
+`workout_history_synced` event only if Home Assistant advertises
+`workout_history_v1`. No GPS, routes, freeform notes, or private Health
+samples are included. History is stored separately per paired device,
+and a sharing revocation clears its current integration state.
+
+**Important:** the source is *Apple Health*, not the full app database.
+Some activity summaries, particularly manual ATHLTH workouts not exported to
+HealthKit, may be absent. Distances are tagged
+`healthkit_unverified`: manual, estimated and actually measured sources
+are not reliably distinguishable in this dataset. Ninety sessions is a
+hard cap, not an assurance of complete 90-day training history.
+The dashboard avoids claiming complete coverage.
+
+HACS and ATHLTH iPhone app code must **both** be updated before history
+can appear. A new HACS version never enables sharing automatically.
+See [v0.6.0 release notes](docs/releases/v0.6.0.md),
+[the iPad Kiosk example](examples/ipad-kiosk-dashboard.yaml)
+and [the training data roadmap](docs/TRAINING_INTELLIGENCE_0_5_0.md).
+
 ### ATHLTH 0.5.1 — iPad kiosk with Home Assistant sidebar
 
 Version 0.5.1 adds an **opt-in ATHLTH kiosk dashboard** specifically for
