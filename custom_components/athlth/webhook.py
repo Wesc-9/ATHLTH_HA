@@ -525,19 +525,23 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
     if avatar_url is not None:
         if not isinstance(avatar_url, str) or len(avatar_url) > 512:
             return "invalid_athlete_avatar_url"
-        parsed = urlsplit(avatar_url)
-        host = parsed.hostname or ""
-        if (
-            parsed.scheme != "https"
-            or not host.endswith(".supabase.co")
-            or not parsed.path.startswith(
-                "/storage/v1/object/public/profile-avatars/"
+        try:
+            parsed = urlsplit(avatar_url)
+            host = parsed.hostname or ""
+            allowed = (
+                parsed.scheme == "https"
+                and host.endswith(".supabase.co")
+                and parsed.path.startswith(
+                    "/storage/v1/object/public/profile-avatars/"
+                )
+                and parsed.username is None
+                and parsed.password is None
+                and parsed.port in (None, 443)
+                and not parsed.fragment
             )
-            or parsed.username is not None
-            or parsed.password is not None
-            or parsed.port not in (None, 443)
-            or parsed.fragment
-        ):
+        except ValueError:
+            allowed = False
+        if not allowed:
             return "invalid_athlete_avatar_url"
 
     records = state.get("performance_records")
@@ -1042,6 +1046,11 @@ def _apply_event(
             for key, value in snapshot.items():
                 if key in RESTORABLE_STATE_KEYS:
                     client.state[key] = value
+            # A deliberately cleared PR snapshot also clears old event-only PRs.
+            # This allows disabling milestone sharing to revoke the active HA
+            # entities without trusting the client to send a second clear flag.
+            if snapshot.get("performance_records") == []:
+                client.state.pop("received_personal_records", None)
 
             # Revoking completed-workout sharing must also remove the route
             # image and historical workout attributes from active HA state.
