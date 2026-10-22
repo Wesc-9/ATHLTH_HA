@@ -578,6 +578,7 @@
     return '<div class="dashboard studio-dashboard">'+
       '<header class="dashboard-head"><div class="dashboard-brand">'+logo()+
       '<div class="subbrand">PERFORMANCE / PERSONAL</div></div>'+statusPill(hass,member)+'</header>'+
+      '<div class="layout-width-tip">For å få flere kort i bredden på iPad: Åpne denne visningen i redigering og velg <strong>Panel (ett kort)</strong>, eller plasser ATHLTH-kortet i en fullbredde Sections-seksjon.</div>'+
       chooser+hero+grid+
       '<footer class="studio-footer"><span>ATHLTH / TRAINING INTELLIGENCE</span>'+
       '<span>Data fra din tilkoblede ATHLTH-installasjon. Ingen beregnede økter eller GPS-ruter.</span></footer>'+
@@ -811,6 +812,8 @@
     '.studio-dashboard .data-coverage{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid #ecebe7;padding-bottom:17px;margin-bottom:5px}.studio-dashboard .data-coverage strong{font-size:31px;font-weight:770;letter-spacing:-1px;color:#b18558}.studio-dashboard .data-coverage>span{font-size:11px;color:#888b85}.studio-dashboard .data-line{display:flex;gap:9px;align-items:center;border-bottom:1px solid #f0eee9;padding:10px 0;font-size:12px}.studio-dashboard .data-line>span:nth-child(2){flex:1}.studio-dashboard .data-line strong{font-size:10px;font-weight:730;color:#8c908a}.studio-dashboard .data-dot{height:8px;width:8px;flex-shrink:0;border-radius:50%;background:#d5d6d1}.studio-dashboard .data-dot.on{background:#628379}.studio-dashboard .data-line .on~strong{color:#628379}.studio-dashboard .data-line .off~strong{color:#aaaba6}',
     '@container (max-width:619px){.studio-dashboard .hero-avatar{height:60px;width:60px;border-radius:18px}.studio-dashboard .hero-person{gap:12px}.studio-dashboard .hero-person h1{font-size:30px}.studio-dashboard .feed-entry{gap:10px}.studio-dashboard .feed-icon{width:35px;height:35px}.studio-dashboard .feed-right{max-width:58px}.studio-dashboard .record-grid{gap:8px}.studio-dashboard .record-tile{padding:12px 10px}.studio-dashboard .record-value{font-size:18px}}',
     ':host{display:block;width:100%;min-width:0;box-sizing:border-box}.studio-dashboard{width:100%;min-width:0;box-sizing:border-box}.studio-dashboard .dashboard-grid{min-width:0}',
+    '.studio-dashboard .layout-width-tip{display:none}',
+    '@media (min-width:768px){@container (max-width:619px){.studio-dashboard .layout-width-tip{display:block;margin:-6px 0 14px;padding:11px 13px;background:#fcf6ec;color:#765533;border:1px solid #ead7c3;border-radius:12px;font-size:11px;line-height:1.5}}}',
     /* A wide iPad panel keeps three clearly differentiated cards per row. */
     '@container (min-width:790px){.studio-dashboard .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.studio-dashboard .dashboard-grid>.span-3{grid-column:span 3}.studio-dashboard .dashboard-grid>.span-2{grid-column:span 2}.studio-dashboard .ath-hero{grid-template-columns:1.08fr 1fr;gap:20px}.studio-dashboard .hero-signals{min-height:205px}}',
     '@container (min-width:620px) and (max-width:789px){.studio-dashboard .dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.studio-dashboard .dashboard-grid>.span-3,.studio-dashboard .dashboard-grid>.span-2{grid-column:span 2}}',
