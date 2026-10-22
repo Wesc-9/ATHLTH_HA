@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timezone, timedelta
 import hashlib
 import hmac
 from http import HTTPStatus
@@ -143,7 +144,7 @@ async def async_handle_webhook(
                 "server_time": now,
                 "commands": client.pending_commands,
                 "capabilities": sorted(SUPPORTED_EVENTS),
-                "features": ["profile_performance_snapshot_v1"],
+                "features": ["profile_performance_snapshot_v1", "workout_history_v1"],
             },
             headers={"Cache-Control": "no-store"},
         )
@@ -206,7 +207,7 @@ async def async_handle_webhook(
                 )
             )
         )
-        or event_type in {"workout_route_map", "workout_finished", "personal_record"}
+        or event_type in {"workout_route_map", "workout_finished", "personal_record", "workout_history_synced"}
     ):
         await runtime.async_save_clients()
 
@@ -300,6 +301,10 @@ def _validate_message(message: object) -> str | None:
         route_error = _validate_workout_route_map(payload)
         if route_error is not None:
             return route_error
+    elif event_type == "workout_history_synced":
+        history_error = _validate_workout_history(payload)
+        if history_error is not None:
+            return history_error
     elif not _payload_has_safe_shape(payload):
         return "invalid_payload"
 
@@ -369,6 +374,68 @@ def _validate_message(message: object) -> str | None:
         ):
             return "invalid_command_ack"
 
+    return None
+
+
+def _history_date(raw: object) -> datetime | None:
+    if not isinstance(raw, str) or not 10 <= len(raw) <= 48:
+        return None
+    try:
+        value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            return None
+        return value.astimezone(timezone.utc)
+    except ValueError:
+        return None
+
+
+def _validate_workout_history(payload: dict[str, Any]) -> str | None:
+    """Strictly bound voluntary retrospective workout summaries, never GPS."""
+    if not set(payload).issubset({"clear", "workouts", "delivery_id"}):
+        return "invalid_workout_history"
+    if payload.get("clear") is True:
+        return None if payload.get("workouts") in (None, []) else "invalid_workout_history"
+    if "clear" in payload and payload["clear"] is not False:
+        return "invalid_workout_history"
+    workouts = payload.get("workouts")
+    if not isinstance(workouts, list) or len(workouts) > 90:
+        return "invalid_workout_history"
+    ids: set[str] = set()
+    now = datetime.now(timezone.utc)
+    for item in workouts:
+        if not isinstance(item, dict) or not set(item).issubset({
+            "id", "type", "started_at", "ended_at", "duration_seconds",
+            "distance_meters", "active_energy_kcal", "environment",
+            "source", "distance_provenance",
+        }):
+            return "invalid_workout_history"
+        identifier = item.get("id")
+        category = item.get("type")
+        if not isinstance(identifier, str) or not 1 <= len(identifier) <= 96:
+            return "invalid_workout_history"
+        if identifier in ids or not isinstance(category, str) or not 1 <= len(category) <= 64:
+            return "invalid_workout_history"
+        ids.add(identifier)
+        if item.get("source") != "apple_health":
+            return "invalid_workout_history"
+        if item.get("distance_provenance") != "healthkit_unverified":
+            return "invalid_workout_history"
+        if item.get("environment") not in ("indoor", "outdoor", "unknown"):
+            return "invalid_workout_history"
+        start = _history_date(item.get("started_at"))
+        end = _history_date(item.get("ended_at"))
+        if start is None or end is None or start > end or end > now + timedelta(days=1):
+            return "invalid_workout_history"
+        if end < now - timedelta(days=92):
+            return "invalid_workout_history"
+        duration = item.get("duration_seconds")
+        if not _number_in_range(duration, 0, 604800):
+            return "invalid_workout_history"
+        for key, upper in (("distance_meters", 5_000_000), ("active_energy_kcal", 100_000)):
+            if key in item and (
+                item[key] is not None and not _number_in_range(item[key], 0, upper)
+            ):
+                return "invalid_workout_history"
     return None
 
 
@@ -966,6 +1033,14 @@ def _apply_event(
         ):
             client.state.pop(key, None)
         _clear_live_state(client)
+
+    elif event_type == "workout_history_synced":
+        if payload.get("clear") is True:
+            client.state.pop("workout_history", None)
+        else:
+            # Only flat, validated workout summaries; no route, notes,
+            # patient records, or embedded health samples.
+            client.state["workout_history"] = payload["workouts"][:90]
 
     elif event_type == "workout_route_map":
         if payload.get("clear") is True:
