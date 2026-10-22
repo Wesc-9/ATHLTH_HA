@@ -50,7 +50,7 @@ const second={
 };
 
 test("all premium ATHLTH cards register once",()=>{
-  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status","tomorrow","trend","mix","rhythm","insight"];
+  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status","tomorrow","trend","mix","rhythm","insight","feed","records","data"];
   for(const name of names)assert.ok(registry.has("athlth-"+name+"-card"),name);
   assert.equal(window.customCards.length,names.length);
 });
@@ -480,4 +480,91 @@ test("training intelligence escapes untrusted names and members",()=>{
   assert.doesNotMatch(html,/<script>evil/);
   assert.doesNotMatch(html,/<img src=x/);
   assert.match(html,/&lt;script&gt;evil/);
+});
+
+
+test("dashboard shows real athlete profile photo only when expressly shared",()=>{
+  const name="Sindre";
+  const avatar="https://demo.supabase.co/storage/v1/object/public/profile-avatars/abc/avatar.jpg?v=1";
+  const states={...first,
+    "sensor.athlth_athlete_profile":state(name,{avatar_url:avatar}),
+    "sensor.athlth_performance_records":state("0",{records:[]}),
+  };
+  const html=card("athlth-dashboard-card",{}, {states});
+  assert.match(html,/Sindre/);
+  assert.match(html,/class="hero-avatar"/);
+  assert.match(html,/https:\/\/demo.supabase.co\/storage\/v1\/object\/public\/profile-avatars\/abc\/avatar.jpg\?v=1/);
+  assert.doesNotMatch(card("athlth-dashboard-card",{}, {states:first}),/<img class="hero-avatar"/);
+});
+
+test("never render an arbitrary attacker avatar URL",()=>{
+  const states={...first,
+    "sensor.athlth_athlete_profile":state("Athlete",{avatar_url:"http://127.0.0.1:8123/api/secrets"}),
+  };
+  const html=card("athlth-dashboard-card",{}, {states});
+  assert.doesNotMatch(html,/src="http:\/\/127.0.0.1/);
+  assert.match(html,/hero-avatar-empty/);
+});
+
+test("recent workout feed sorts by completion, preserves device and never shows fake values",()=>{
+  const records=[
+    {id:"old",name:"Strength",type:"strength",ended_at:"2026-10-20T13:00:00Z",duration_seconds:1800,device:"Apple Watch"},
+    {id:"new",name:"Morning run",type:"outdoor_run",ended_at:"2026-10-21T13:00:00Z",duration_seconds:2400,distance_meters:8000,device:"iPhone"},
+    {id:"old",name:"Duplicate",type:"strength",ended_at:"2026-10-20T13:00:00Z"}
+  ];
+  const html=card("athlth-feed-card",{}, {states:{...first,
+    "sensor.athlth_recent_workouts":state("3",{workouts:records})
+  }});
+  assert.ok(html.indexOf("Morning run") < html.indexOf("Strength"));
+  assert.match(html,/8,00 km/);
+  assert.match(html,/Apple Watch/);
+  assert.doesNotMatch(html,/Duplicate/);
+  assert.match(html,/NYESTE/);
+});
+
+test("performance card displays only supplied PR values in a finite list",()=>{
+  const records=[
+    {id:"a",title:"Fastest 5K",value:"22:01",category:"running",date:"2026-10-20T12:00:00Z"},
+    {id:"b",title:"Bench press",value:"85 kg × 5",category:"strength",date:"2026-10-21T12:00:00Z"}
+  ];
+  const html=card("athlth-records-card",{}, {states:{...first,
+    "sensor.athlth_performance_records":state("2",{records,source:"ATHLTH snapshot"})
+  }});
+  assert.match(html,/22:01/);
+  assert.match(html,/85 kg × 5/);
+  assert.match(html,/Delte rekorder fra ATHLTH/);
+  assert.ok(html.indexOf("Bench press") < html.indexOf("Fastest 5K"));
+  const empty=card("athlth-records-card",{}, {states:{}});
+  assert.match(empty,/Ingen personlige rekorder er delt/);
+  assert.doesNotMatch(empty,/22:01/);
+});
+
+test("Athlete data from another paired installation does not cross profiles",()=>{
+  const states={...first,
+    "sensor.athlth_athlete_profile":state("Athlete A",{avatar_url:"https://one.supabase.co/storage/v1/object/public/profile-avatars/a/avatar.jpg"}),
+    "sensor.partner_last_workout":state("Workout"),
+    "sensor.partner_athlete_profile":state("Athlete B",{avatar_url:"https://two.supabase.co/storage/v1/object/public/profile-avatars/b/avatar.jpg"}),
+    "sensor.athlth_performance_records":state("1",{records:[{id:"a",title:"5 km",value:"20:01",category:"running",date:"2026-10-20T10:00:00Z"}]}),
+    "sensor.partner_performance_records":state("1",{records:[{id:"b",title:"5 km",value:"21:22",category:"running",date:"2026-10-20T10:00:00Z"}]})
+  };
+  const members=[{name:"A",entity:"sensor.athlth_last_workout"},{name:"B",entity:"sensor.partner_last_workout"}];
+  const html=card("athlth-dashboard-card",{members},{states});
+  assert.match(html,/Athlete A/);
+  assert.match(html,/20:01/);
+  assert.doesNotMatch(html,/Athlete B/);
+  assert.doesNotMatch(html,/21:22/);
+});
+
+test("bad workout and performance titles cannot inject HTML",()=>{
+  const now=new Date().toISOString();
+  const states={...first,
+    "sensor.athlth_recent_workouts":state("1",{workouts:[{name:"<script>steal()</script>",type:"strength",ended_at:now}]}),
+    "sensor.athlth_performance_records":state("1",{records:[{id:"x",title:"<img src=x onerror=1>",value:"<svg onload=1>",category:"strength",date:now}]})
+  };
+  const html=card("athlth-dashboard-card",{}, {states});
+  assert.doesNotMatch(html,/<script>steal/);
+  assert.doesNotMatch(html,/<img src=x/);
+  assert.doesNotMatch(html,/<svg onload/);
+  assert.match(html,/&lt;script&gt;/);
+  assert.match(html,/&lt;svg/);
 });
