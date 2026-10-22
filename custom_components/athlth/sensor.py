@@ -52,6 +52,11 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         icon="mdi:trophy-outline",
     ),
     SensorEntityDescription(
+        key="workout_history",
+        name="Consented 90-day workout history",
+        icon="mdi:chart-timeline-variant",
+    ),
+    SensorEntityDescription(
         key="recent_workouts",
         name="Received workout history",
         icon="mdi:history",
@@ -396,6 +401,10 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                 len(events) if isinstance(events, list) else 0
             )
 
+        if key == "workout_history":
+            values = self._client.state.get("workout_history")
+            return len(values) if isinstance(values, list) else None
+
         if key == "recent_workouts":
             records = self._client.state.get("recent_workouts")
             return len(records) if isinstance(records, list) else None
@@ -494,6 +503,57 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     if self._client.state.get("performance_records")
                     else "received PR events"
                 )
+
+        if self.entity_description.key == "workout_history":
+            # Keep the HA state small even for a 90-session upload.
+            # Aggregate by day, expose at most twelve recent summaries,
+            # and NEVER publish full GPS, Health samples or personal notes.
+            history = self._client.state.get("workout_history")
+            if isinstance(history, list):
+                days: dict[str, dict] = {}
+                for record in history[:90]:
+                    if not isinstance(record, dict):
+                        continue
+                    day = str(record.get("ended_at", ""))[:10]
+                    try:
+                        dt = datetime.fromisoformat(
+                            str(record.get("ended_at")).replace("Z", "+00:00")
+                        )
+                        day = dt.date().isoformat()
+                    except ValueError:
+                        continue
+                    existing = days.setdefault(day, {
+                        "date": day, "sessions": 0,
+                        "minutes": 0, "distance_km": 0,
+                    })
+                    existing["sessions"] += 1
+                    existing["minutes"] += round(
+                        float(record.get("duration_seconds", 0)) / 60, 2
+                    )
+                    distance = record.get("distance_meters")
+                    if isinstance(distance, (int, float)) and distance >= 0:
+                        existing["distance_km"] += round(distance / 1000, 3)
+                attributes["days"] = sorted(
+                    days.values(), key=lambda x: x["date"]
+                )[-90:]
+                attributes["recent"] = [
+                    {
+                        key: item[key]
+                        for key in (
+                            "type", "ended_at", "duration_seconds",
+                            "distance_meters", "active_energy_kcal",
+                            "environment", "source", "distance_provenance",
+                        )
+                        if key in item
+                    }
+                    for item in sorted(
+                        (r for r in history if isinstance(r, dict)),
+                        key=lambda r: str(r.get("ended_at", "")),
+                        reverse=True,
+                    )[:12]
+                ]
+                attributes["scope"] = "Apple Health summaries; 90-day window"
+                attributes["distance_provenance"] = "healthkit_unverified"
 
         if self.entity_description.key == "recent_workouts":
             workouts = self._client.state.get("recent_workouts")
