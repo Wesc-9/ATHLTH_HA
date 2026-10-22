@@ -3,6 +3,11 @@
 # Use a PANEL view for this combined card; placing it inside a masonry column
 # constrains its width and will prevent the three-column desktop layout.
 # There is no demo data: every value comes from the connected ATHLTH devices.
+# The four sections are rendered within one full-width dashboard card:
+# NOW/NEXT, TRAINING FOUNDATION, PATTERNS, TRAINING INSIGHTS.
+# The recent activity bar chart and activity mix use only the last 10 received
+# completed workouts. They do not claim to represent full workout history.
+# Tomorrow is based only on dated and planned ATHLTH calendar/next-workout data.
 # Each optional member must consent to sharing in their own ATHLTH app.
 #
 # All card types are bundled with ATHLTH_HA. Supported individual cards:
@@ -10,7 +15,9 @@
 # athlth-last-card, athlth-plan-card, athlth-recovery-card,
 # athlth-active-card, athlth-family-card, athlth-dashboard-card,
 # athlth-calendar-card, athlth-goals-card, athlth-strength-card,
-# athlth-history-card, athlth-status-card.
+# athlth-history-card, athlth-status-card, athlth-tomorrow-card,
+# athlth-trend-card, athlth-mix-card, athlth-rhythm-card,
+# athlth-insight-card.
 #
 # Primary installation uses sensor.athlth_last_workout.
 # For additional accounts/devices, use the exact "Last workout" entity id
