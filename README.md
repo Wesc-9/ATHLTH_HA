@@ -199,6 +199,47 @@ integration, with no external CDN and no fake workout data.
 
 For a complete dashboard see [examples/premium-dashboard.yaml](examples/premium-dashboard.yaml).
 
+### Training Intelligence studio redesign
+
+The combined premium dashboard now has four intentionally structured parts:
+
+- **Nå og neste:** featured completed workout with its real matched route image
+  where available, and a dedicated **I morgen** card sourced only from
+  tomorrow's dated ATHLTH schedule or confirmed next-workout time.
+- **Treningsgrunnlaget:** seven-day duration bar chart (only received,
+  completed workouts with shared duration), actual week progress, active
+  training plan and the seven-day calendar.
+- **Se mønstrene:** weekly completed/planned/skipped schedule rhythm,
+  training-category distribution ring and consent-dependent recovery metrics.
+- **Forstå fremgangen:** explanations of weekly plan progress, last shared
+  recovery score and what remains unknown, alongside goals and recent history.
+
+The presentation uses a restrained ATHLTH identity: one primary brand signature,
+editorial spacing, dark performance header, fine lines, warm metallic accents
+and light analytic cards. It is self-contained: no third-party JavaScript,
+CDN, dummy measurements, invented routes or extra HA dependencies.
+
+New modular cards (also usable individually) are:
+`custom:athlth-tomorrow-card`, `custom:athlth-trend-card`,
+`custom:athlth-mix-card`, `custom:athlth-rhythm-card` and
+`custom:athlth-insight-card`.
+
+**Data limits:** Received workout history contains at most ten completed
+events per installation. The seven-day activity chart and category donut
+may therefore be incomplete, even when one week's ATHLTH aggregate sensor
+shows a higher value. The UI labels these plots as received data, and does
+not treat absent workouts as measured zero. Full multiweek training load,
+HRV and recovery history still require additional source/protocol support.
+Tomorrow's training is shown only when a real scheduled date is available;
+no workout is generated for an empty calendar. Privacy sharing must be
+enabled by the ATHLTH user for each relevant category.
+
+**Deployment:** The repository `main` branch contains the redesign, but
+GitHub commits do not install a HACS update on a running HA instance.
+Test it on a separate HA instance by deploying the updated integration
+files and refreshing the frontend module. Do not announce a public HACS
+release before an actual on-device test and an explicit release decision.
+
 ### New dashboard layout: three cards across
 
 The combined `custom:athlth-dashboard-card` now uses an ATHLTH-branded
