@@ -519,7 +519,7 @@
       lastSync(hass,member));
   }
 
-  function dashboard(hass,members,selected) {
+  function dashboard(hass,members,selected,kiosk=false) {
     const member=members[selected]||members[0];
     const now=new Date();
     const dateline=now.toLocaleDateString("nb-NO",{weekday:"long",day:"numeric",month:"long"});
@@ -575,7 +575,7 @@
       '<div>'+(live?active(hass,member):statusCard(hass,member))+'</div>'+
       (members.length>1?'<div class="span-3">'+family(hass,members)+'</div>':"")+
       '</div>';
-    return '<div class="dashboard studio-dashboard">'+
+    return '<div class="dashboard studio-dashboard'+(kiosk?' kiosk-layout':'')+'">'+
       '<header class="dashboard-head"><div class="dashboard-brand">'+logo()+
       '<div class="subbrand">PERFORMANCE / PERSONAL</div></div>'+statusPill(hass,member)+'</header>'+
       '<div class="layout-width-tip">For å få flere kort i bredden på iPad: Åpne denne visningen i redigering og velg <strong>Panel (ett kort)</strong>, eller plasser ATHLTH-kortet i en fullbredde Sections-seksjon.</div>'+
@@ -817,6 +817,10 @@
     /* A wide iPad panel keeps three clearly differentiated cards per row. */
     '@container (min-width:790px){.studio-dashboard .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.studio-dashboard .dashboard-grid>.span-3{grid-column:span 3}.studio-dashboard .dashboard-grid>.span-2{grid-column:span 2}.studio-dashboard .ath-hero{grid-template-columns:1.08fr 1fr;gap:20px}.studio-dashboard .hero-signals{min-height:205px}}',
     '@container (min-width:620px) and (max-width:789px){.studio-dashboard .dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.studio-dashboard .dashboard-grid>.span-3,.studio-dashboard .dashboard-grid>.span-2{grid-column:span 2}}',
+    /* Opt-in ATHLTH iPad kiosk composition. Does not attempt to hack HA shell outside shadow DOM. */
+    '.studio-dashboard.kiosk-layout{max-width:none;width:100%;margin:0;box-sizing:border-box;padding:8px 12px 28px}.studio-dashboard.kiosk-layout .dashboard-head{padding:2px 6px 10px}.studio-dashboard.kiosk-layout .ath-hero{margin-bottom:9px}.studio-dashboard.kiosk-layout .dashboard-grid{gap:14px}.studio-dashboard.kiosk-layout .studio-section-title{margin-top:16px}.studio-dashboard.kiosk-layout .studio-footer{margin-top:18px}.studio-dashboard.kiosk-layout .member-tabs button{min-height:44px;touch-action:manipulation}.studio-dashboard.kiosk-layout .feed-entry{min-height:56px}.studio-dashboard.kiosk-layout .dashboard-grid>div{min-width:0}',
+    '@container (min-width:790px){.studio-dashboard.kiosk-layout .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}',
+    '@container (max-width:619px){.studio-dashboard.kiosk-layout{padding:3px 2px 18px}.studio-dashboard.kiosk-layout .dashboard-grid{gap:12px}.studio-dashboard.kiosk-layout .ath-hero{margin-bottom:10px}}',
     '@media(prefers-reduced-motion:reduce){.studio-dashboard .dashboard-grid ha-card{transition:none}}',
     '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
   ].join("");
@@ -1021,7 +1025,7 @@
           "athlth-feed-card":()=>activityFeed(this._hass,member),
           "athlth-records-card":()=>performance(this._hass,member),
           "athlth-data-card":()=>dataFoundation(this._hass,member),
-          "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected)
+          "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected,this._config.kiosk===true)
         };
         updateCardMarkup(this._root,"<style>"+CSS+"</style>"+builders[kind]());
       }
