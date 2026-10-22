@@ -548,7 +548,7 @@
       signal("UKENS FREMDRIFT",progress===null?"—":fmt(progress)+"%","rapportert")+
       signal("DAGSFORM",recoveryScore===null?"—":fmt(recoveryScore)+"%","sist delt")+'</div>'+
       '</section>';
-    const section=(index,name,description)=>'<div class="studio-section-title span-3"><div><span class="studio-index">'+index+'</span>'+
+    const section=(index,name,description)=>'<div id="athlth-section-'+esc(index)+'" class="studio-section-title span-3"><div><span class="studio-index">'+index+'</span>'+
       '<h2>'+name+'</h2></div><p>'+description+'</p></div>';
     const training=entity(hass,member,"workout_active");
     const live=training&&training.state==="on"&&liveFresh(hass,member);
@@ -579,7 +579,15 @@
       '<header class="dashboard-head"><div class="dashboard-brand">'+logo()+
       '<div class="subbrand">PERFORMANCE / PERSONAL</div></div>'+statusPill(hass,member)+'</header>'+
       '<div class="layout-width-tip">For å få flere kort i bredden på iPad: Åpne denne visningen i redigering og velg <strong>Panel (ett kort)</strong>, eller plasser ATHLTH-kortet i en fullbredde Sections-seksjon.</div>'+
-      chooser+hero+grid+
+      chooser+hero+
+      (kiosk?'<nav class="kiosk-jump-nav" aria-label="Hopp til treningsområde">'+
+        '<span class="kiosk-jump-label">SE OGSÅ</span>'+
+        '<button type="button" data-athlth-section="01">Neste økt</button>'+
+        '<button type="button" data-athlth-section="02">Treningsuke</button>'+
+        '<button type="button" data-athlth-section="03">Dagsform</button>'+
+        '<button type="button" data-athlth-section="04">Prestasjoner</button>'+
+        '<button type="button" data-athlth-section="05">Datagrunnlag</button>'+
+        '</nav>':"")+grid+
       '<footer class="studio-footer"><span>ATHLTH / TRAINING INTELLIGENCE</span>'+
       '<span>Data fra din tilkoblede ATHLTH-installasjon. Ingen beregnede økter eller GPS-ruter.</span></footer>'+
       '</div>';
@@ -821,6 +829,9 @@
     '.studio-dashboard.kiosk-layout{max-width:none;width:100%;margin:0;box-sizing:border-box;padding:8px 12px 28px}.studio-dashboard.kiosk-layout .dashboard-head{padding:2px 6px 10px}.studio-dashboard.kiosk-layout .ath-hero{margin-bottom:9px}.studio-dashboard.kiosk-layout .dashboard-grid{gap:14px}.studio-dashboard.kiosk-layout .studio-section-title{margin-top:16px}.studio-dashboard.kiosk-layout .studio-footer{margin-top:18px}.studio-dashboard.kiosk-layout .member-tabs button{min-height:44px;touch-action:manipulation}.studio-dashboard.kiosk-layout .feed-entry{min-height:56px}.studio-dashboard.kiosk-layout .dashboard-grid>div{min-width:0}',
     '@container (min-width:790px){.studio-dashboard.kiosk-layout .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}',
     '@container (max-width:619px){.studio-dashboard.kiosk-layout{padding:3px 2px 18px}.studio-dashboard.kiosk-layout .dashboard-grid{gap:12px}.studio-dashboard.kiosk-layout .ath-hero{margin-bottom:10px}}',
+
+    '.studio-dashboard.kiosk-layout .kiosk-jump-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 18px;padding:2px 0 6px}.studio-dashboard.kiosk-layout .kiosk-jump-label{font-size:9px;font-weight:850;letter-spacing:1px;color:#9d7c5c;margin-right:4px}.studio-dashboard.kiosk-layout .kiosk-jump-nav button{min-height:39px;border-radius:999px;border:1px solid #dfd9d0;background:#fff;color:#5b605a;font-family:inherit;font-size:11px;font-weight:730;padding:9px 13px;cursor:pointer;touch-action:manipulation}.studio-dashboard.kiosk-layout .kiosk-jump-nav button:focus-visible{outline:3px solid #be9462;outline-offset:2px}.studio-dashboard.kiosk-layout .studio-section-title{scroll-margin-top:15px}',
+    '@container (min-width:720px) and (max-width:789px){.studio-dashboard.kiosk-layout .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.studio-dashboard.kiosk-layout .dashboard-grid>.span-2{grid-column:span 2}.studio-dashboard.kiosk-layout .dashboard-grid>.span-3{grid-column:span 3}.studio-dashboard.kiosk-layout .dashboard-grid .body{padding:16px}.studio-dashboard.kiosk-layout .record-grid{grid-template-columns:1fr}.studio-dashboard.kiosk-layout .hero-signals{gap:1px}}',
     '@media(prefers-reduced-motion:reduce){.studio-dashboard .dashboard-grid ha-card{transition:none}}',
     '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
   ].join("");
@@ -992,6 +1003,19 @@
       static getConfigElement(){return document.createElement("athlth-config-editor");}
       connectedCallback(){
         this._root.addEventListener("click",(event)=>{
+          const sectionButton=event.target&&event.target.closest&&
+            event.target.closest("[data-athlth-section]");
+          if(sectionButton){
+            const targetId=sectionButton.getAttribute("data-athlth-section");
+            if(/^(01|02|03|04|05)$/.test(targetId)){
+              const target=this._root.getElementById&&
+                this._root.getElementById("athlth-section-"+targetId);
+              if(target&&typeof target.scrollIntoView==="function"){
+                target.scrollIntoView({block:"start",behavior:"smooth"});
+              }
+            }
+            return;
+          }
           const btn=event.target && event.target.closest && event.target.closest("[data-athlth-member]");
           if(!btn) return;
           const n=Number(btn.getAttribute("data-athlth-member"));
