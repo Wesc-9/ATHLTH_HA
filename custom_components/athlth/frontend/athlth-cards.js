@@ -519,12 +519,12 @@
     const delta=change===null?"Én delt økt":change===0?"Uendret i utvalget":
       (change>0?"+":"")+fmt(change,1)+" kg fra første til siste";
     return card("Styrkeprogresjon",
-      '<div class="strength-progress-top"><div><span class="eyebrow">VERIFISERT ARBEIDSSETT · '+esc(current.reps)+' REPS</span>'+
+      '<div class="strength-progress-top"><div><span class="eyebrow">FULLFØRT ARBEIDSSETT · '+esc(current.reps)+' REPS</span>'+
       '<h3>'+esc(current.exercise)+'</h3></div><div class="strength-progress-highlight"><strong>'+fmt(best,1)+' kg</strong>'+
       '<small>Høyest i delte økter</small></div></div>'+
       '<div class="strength-progress-picker" role="group" aria-label="Øvelse og repetisjonstall">'+buttons+'</div>'+
       '<div class="strength-progress-rows">'+bars+'</div>'+
-      '<p class="note">'+esc(delta)+'. Kun samme øvelse og repetisjonstall sammenlignes. Ikke en bekreftet all-time PR; maks 60 delte datapunkter.</p>');
+      '<p class="note">'+esc(delta)+'. Kun samme øvelse og repetisjonstall sammenlignes. Ingen sensorverifisering av vekten. Ikke en bekreftet all-time PR; maks 60 delte datapunkter.</p>');
   }
 
   function performance(hass,member){
