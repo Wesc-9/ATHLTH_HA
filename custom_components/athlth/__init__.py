@@ -135,6 +135,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     primary_state = {}
     saved_primary_workouts = stored_clients_data.get("primary_recent_workouts", [])
+    saved_history = stored_clients_data.get("primary_workout_history")
+    if isinstance(saved_history, list):
+        primary_state["workout_history"] = [
+            record for record in saved_history[:90] if isinstance(record, dict)
+        ]
     if isinstance(saved_primary_workouts, list):
         primary_state["recent_workouts"] = [
             item for item in saved_primary_workouts[:10] if isinstance(item, dict)
@@ -228,6 +233,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             additional_state = {}
             saved_workouts = raw_client.get("recent_workouts", [])
+            saved_history = raw_client.get("workout_history")
+            if isinstance(saved_history, list):
+                additional_state["workout_history"] = [
+                    record for record in saved_history[:90] if isinstance(record, dict)
+                ]
             if isinstance(saved_workouts, list):
                 additional_state["recent_workouts"] = [
                     item for item in saved_workouts[:10] if isinstance(item, dict)
