@@ -31,7 +31,8 @@
     "athlth-feed-card": ["ATHLTH Øktlogg", "De siste fullførte øktene som Home Assistant har mottatt."],
     "athlth-records-card": ["ATHLTH Prestasjoner", "Delte personlige rekorder fra ATHLTH."],
     "athlth-data-card": ["ATHLTH Datagrunnlag", "Hva er tilgjengelig for analyser og hva mangler."],
-    "athlth-long-trend-card": ["ATHLTH Treningshistorikk", "Personvernvennlig 30/90-dagers aktivitetsoversikt fra Apple Health."]
+    "athlth-long-trend-card": ["ATHLTH Treningshistorikk", "Personvernvennlig 30/90-dagers aktivitetsoversikt fra Apple Health."],
+    "athlth-strength-progress-card": ["ATHLTH Styrkeprogresjon", "Bekreftede arbeidssett fra avsluttede styrkeøkter, gruppert etter øvelse og repetisjoner."]
   };
   const SUFFIX = {
     presence: "presence",
@@ -46,6 +47,7 @@
     last_workout: "last_workout",
     recent_workouts: "recent_workouts",
     workout_history: "workout_history",
+    strength_progress: "strength_progress",
     recovery_score: "recovery_score",
     recovery_state: "recovery_state",
     sleep_duration: "sleep_duration_minutes",
@@ -477,6 +479,54 @@
       '<div class="feed-list">'+entries+'</div>'+
       '<p class="note">Viser opptil '+fmt(limit)+' av maks ti mottatte økter. Dette er ikke hele treningsarkivet.</p>');
   }
+  function strengthProgress(hass,member,selected=0){
+    const sensor=entity(hass,member,"strength_progress");
+    const source=sensor&&sensor.attributes&&sensor.attributes.records;
+    const raw=Array.isArray(source)?source.slice(0,60):[];
+    const records=raw.filter(r=>r&&r.source==="completed_strength_set"&&typeof r.exercise==="string"&&
+      r.exercise.trim()&&Number.isInteger(r.reps)&&r.reps>=1&&r.reps<=50&&
+      Number.isFinite(Number(r.weight_kg))&&Number(r.weight_kg)>0&&
+      Number.isFinite(asDate(r.ended_at).getTime()));
+    if(!records.length)return card("Styrkeprogresjon",
+      empty("Ingen bekreftede arbeidssett er delt med Home Assistant.")+
+      '<p class="note">Aktiver «Styrkeprogresjon · fullførte sett» i ATHLTH. Uferdige økter og oppvarming tas ikke med.</p>');
+    const groups=new Map();
+    for(const row of records){
+      const key=row.exercise.trim().toLocaleLowerCase("nb-NO")+"|"+row.reps;
+      if(!groups.has(key))groups.set(key,{exercise:row.exercise.trim(),reps:row.reps,rows:[]});
+      groups.get(key).rows.push(row);
+    }
+    const sorted=[...groups.values()].sort((a,b)=>
+      Math.max(...b.rows.map(x=>asDate(x.ended_at).getTime()))-
+      Math.max(...a.rows.map(x=>asDate(x.ended_at).getTime())));
+    const index=Math.max(0,Math.min(selected,sorted.length-1));
+    const current=sorted[index];
+    const entries=[...current.rows].sort((a,b)=>asDate(a.ended_at)-asDate(b.ended_at)).slice(-10);
+    const best=Math.max(...entries.map(r=>Number(r.weight_kg)));
+    const first=entries[0],latest=entries[entries.length-1];
+    const change=entries.length>1?Number(latest.weight_kg)-Number(first.weight_kg):null;
+    const buttons=sorted.slice(0,8).map((g,i)=>
+      '<button type="button" data-athlth-strength-group="'+i+'" aria-pressed="'+(i===index)+
+      '" class="'+(i===index?'selected':'')+'">'+esc(g.exercise)+' · '+g.reps+' reps</button>').join("");
+    const bars=entries.map(row=>{
+      const weight=Number(row.weight_kg),percent=Math.max(0,Math.min(100,weight/best*100));
+      const day=asDate(row.ended_at).toLocaleDateString("nb-NO",{day:"numeric",month:"short"});
+      return '<div class="strength-progress-row"><span>'+esc(day)+'</span>'+
+        '<div class="strength-progress-track" role="progressbar" aria-label="'+esc(current.exercise+" "+current.reps+" reps "+fmt(weight,1)+" kilo")+
+        '" aria-valuemin="0" aria-valuemax="'+best+'" aria-valuenow="'+weight+'"><span style="width:'+percent.toFixed(1)+'%"></span></div>'+
+        '<strong>'+fmt(weight,1)+' kg</strong></div>';
+    }).join("");
+    const delta=change===null?"Én delt økt":change===0?"Uendret i utvalget":
+      (change>0?"+":"")+fmt(change,1)+" kg fra første til siste";
+    return card("Styrkeprogresjon",
+      '<div class="strength-progress-top"><div><span class="eyebrow">VERIFISERT ARBEIDSSETT · '+esc(current.reps)+' REPS</span>'+
+      '<h3>'+esc(current.exercise)+'</h3></div><div class="strength-progress-highlight"><strong>'+fmt(best,1)+' kg</strong>'+
+      '<small>Høyest i delte økter</small></div></div>'+
+      '<div class="strength-progress-picker" role="group" aria-label="Øvelse og repetisjonstall">'+buttons+'</div>'+
+      '<div class="strength-progress-rows">'+bars+'</div>'+
+      '<p class="note">'+esc(delta)+'. Kun samme øvelse og repetisjonstall sammenlignes. Ikke en bekreftet all-time PR; maks 60 delte datapunkter.</p>');
+  }
+
   function performance(hass,member){
     const sensor=entity(hass,member,"performance_records");
     const raw=sensor&&sensor.attributes&&sensor.attributes.records;
@@ -507,6 +557,7 @@
       ["Restitusjon",num(entity(hass,member,"recovery_score"))!==null],
       ["Økthistorikk",receivedWorkouts(hass,member).length>0],
       ["30/90-dagers historikk",!!(entity(hass,member,"workout_history")&&Array.isArray(entity(hass,member,"workout_history").attributes?.days))],
+      ["Styrkeprogresjon",!!(entity(hass,member,"strength_progress")&&Array.isArray(entity(hass,member,"strength_progress").attributes?.records))],
       ["Prestasjoner",!!(entity(hass,member,"performance_records")&&
          Number(valueOf(entity(hass,member,"performance_records")))>0)],
       ["Rutekart",!!(entity(hass,member,"last_workout_route")&&
@@ -522,7 +573,7 @@
       lastSync(hass,member));
   }
 
-  function dashboard(hass,members,selected,kiosk=false,range=30) {
+  function dashboard(hass,members,selected,kiosk=false,range=30,strengthGroup=0) {
     const member=members[selected]||members[0];
     const now=new Date();
     const dateline=now.toLocaleDateString("nb-NO",{weekday:"long",day:"numeric",month:"long"});
@@ -572,6 +623,7 @@
       section("04","Resultater og prestasjoner","Øktene du har gjort og rekordene du har satt.")+
       '<div class="span-2 feed-area">'+activityFeed(hass,member)+'</div>'+
       '<div class="records-area">'+performance(hass,member)+'</div>'+
+      '<div class="span-3 strength-progress-area">'+strengthProgress(hass,member,strengthGroup)+'</div>'+
       section("05","Forstå fremgangen","Hva som er kjent, og hva vi fortsatt trenger data for.")+
       '<div class="span-2 insight-area">'+insights(hass,member)+'</div>'+
       '<div>'+goals(hass,member)+'</div>'+
@@ -885,6 +937,8 @@
     '@container (min-width:720px) and (max-width:789px){.studio-dashboard.kiosk-layout .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.studio-dashboard.kiosk-layout .dashboard-grid>.span-2{grid-column:span 2}.studio-dashboard.kiosk-layout .dashboard-grid>.span-3{grid-column:span 3}.studio-dashboard.kiosk-layout .dashboard-grid .body{padding:16px}.studio-dashboard.kiosk-layout .record-grid{grid-template-columns:1fr}.studio-dashboard.kiosk-layout .hero-signals{gap:1px}}',
     '.studio-dashboard .long-summary{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.studio-dashboard .long-stat{display:flex;flex-direction:column;gap:3px}.studio-dashboard .long-stat strong{font-size:24px;letter-spacing:-.8px;color:#283030}.studio-dashboard .long-stat span{font-size:10px;color:#868983}.studio-dashboard .long-range-switch{display:flex;gap:4px;padding:3px;margin-left:auto;background:#f2f0ed;border-radius:999px}.studio-dashboard .long-range-switch button{min-height:36px;padding:7px 13px;border:0;border-radius:999px;background:transparent;color:#717773;font-family:inherit;font-weight:720;font-size:11px;cursor:pointer;touch-action:manipulation}.studio-dashboard .long-range-switch button.active{background:#26312f;color:#fff}.studio-dashboard .long-range-switch button:focus-visible{outline:3px solid #c7945e;outline-offset:2px}.studio-dashboard .long-chart{height:160px;display:flex;gap:7px;justify-content:space-around;align-items:stretch;padding:21px 1px 6px;border-bottom:1px solid #eceae4}.studio-dashboard .long-bar-group{min-width:0;flex:1;display:flex;flex-direction:column;gap:7px;align-items:center}.studio-dashboard .long-bar-track{height:120px;width:100%;max-width:56px;display:flex;align-items:flex-end;border-radius:7px;background:#f5f3ef;overflow:hidden}.studio-dashboard .long-bar-fill{display:block;width:100%;background:linear-gradient(0deg,#7f988e,#bd9a72);border-radius:7px 7px 0 0}.studio-dashboard .long-bar-group small{font-size:9px;color:#8b9088;white-space:nowrap}.studio-dashboard .long-trend-area .note{margin-top:14px}',
     '@container (max-width:619px){.studio-dashboard .long-summary{gap:13px}.studio-dashboard .long-stat strong{font-size:19px}.studio-dashboard .long-range-switch{margin-left:0;width:100%;justify-content:center}.studio-dashboard .long-chart{gap:3px}.studio-dashboard .long-bar-group small{font-size:8px}}',
+    '.studio-dashboard .strength-progress-top{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.studio-dashboard .strength-progress-top h3{font-size:22px;letter-spacing:-.55px;margin:7px 0 2px}.studio-dashboard .strength-progress-highlight{display:flex;flex-direction:column;text-align:right;gap:5px}.studio-dashboard .strength-progress-highlight strong{font-size:27px;color:#2c3934}.studio-dashboard .strength-progress-highlight small{font-size:10px;color:#898b87}.studio-dashboard .strength-progress-picker{display:flex;flex-wrap:wrap;gap:7px;margin:18px 0;padding-bottom:4px}.studio-dashboard .strength-progress-picker button{font-family:inherit;padding:10px 13px;border-radius:999px;border:1px solid #e4e1da;background:#f9f8f5;color:#727a74;font-size:11px;font-weight:750;cursor:pointer;min-height:38px;touch-action:manipulation}.studio-dashboard .strength-progress-picker button.selected{background:#293732;border-color:#293732;color:#fff}.studio-dashboard .strength-progress-picker button:focus-visible{outline:3px solid #bd9568;outline-offset:2px}.studio-dashboard .strength-progress-rows{display:grid;gap:10px}.studio-dashboard .strength-progress-row{display:grid;grid-template-columns:82px minmax(0,1fr) 75px;gap:13px;align-items:center;color:#7f8780;font-size:11px}.studio-dashboard .strength-progress-row strong{text-align:right;color:#343c37;font-size:12px;font-weight:760;white-space:nowrap}.studio-dashboard .strength-progress-track{height:11px;border-radius:999px;background:#f0eee9;overflow:hidden}.studio-dashboard .strength-progress-track>span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#8aaba0,#c09b6f)}.studio-dashboard .strength-progress-area .note{margin-top:15px}',
+    '@container (max-width:619px){.studio-dashboard .strength-progress-row{grid-template-columns:55px minmax(0,1fr) 65px;gap:8px}.studio-dashboard .strength-progress-highlight strong{font-size:22px}}',
     '@media(prefers-reduced-motion:reduce){.studio-dashboard .dashboard-grid ha-card{transition:none}}',
     '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
   ].join("");
@@ -1038,6 +1092,7 @@
         this._config={type:"custom:"+kind};
         this._selected=0;
         this._historyRange=30;
+        this._strengthGroup=0;
       }
       setConfig(config){
         if(!config || typeof config!=="object") throw new Error("ATHLTH-kort: ugyldig konfigurasjon.");
@@ -1057,6 +1112,16 @@
       static getConfigElement(){return document.createElement("athlth-config-editor");}
       connectedCallback(){
         this._root.addEventListener("click",(event)=>{
+          const strengthButton=event.target && event.target.closest &&
+            event.target.closest("[data-athlth-strength-group]");
+          if(strengthButton){
+            const next=Number(strengthButton.getAttribute("data-athlth-strength-group"));
+            if(Number.isInteger(next)&&next>=0&&next<8){
+              this._strengthGroup=next;
+              this.render();
+            }
+            return;
+          }
           const rangeButton=event.target && event.target.closest &&
             event.target.closest("[data-athlth-range]");
           if(rangeButton){
@@ -1114,7 +1179,8 @@
           "athlth-records-card":()=>performance(this._hass,member),
           "athlth-data-card":()=>dataFoundation(this._hass,member),
           "athlth-long-trend-card":()=>longTrend(this._hass,member,this._historyRange),
-          "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected,this._config.kiosk===true,this._historyRange)
+          "athlth-strength-progress-card":()=>strengthProgress(this._hass,member,this._strengthGroup),
+          "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected,this._config.kiosk===true,this._historyRange,this._strengthGroup)
         };
         updateCardMarkup(this._root,"<style>"+CSS+"</style>"+builders[kind]());
       }
