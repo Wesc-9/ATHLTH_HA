@@ -144,7 +144,7 @@ async def async_handle_webhook(
                 "server_time": now,
                 "commands": client.pending_commands,
                 "capabilities": sorted(SUPPORTED_EVENTS),
-                "features": ["profile_performance_snapshot_v1", "workout_history_v1"],
+                "features": ["profile_performance_snapshot_v1", "workout_history_v1", "strength_progress_v1"],
             },
             headers={"Cache-Control": "no-store"},
         )
@@ -207,7 +207,7 @@ async def async_handle_webhook(
                 )
             )
         )
-        or event_type in {"workout_route_map", "workout_finished", "personal_record", "workout_history_synced"}
+        or event_type in {"workout_route_map", "workout_finished", "personal_record", "workout_history_synced", "strength_progress_synced"}
     ):
         await runtime.async_save_clients()
 
@@ -222,7 +222,7 @@ async def async_handle_webhook(
             "server_time": now,
             "commands": client.pending_commands,
             "capabilities": sorted(SUPPORTED_EVENTS),
-            "features": ["profile_performance_snapshot_v1", "workout_history_v1"],
+            "features": ["profile_performance_snapshot_v1", "workout_history_v1", "strength_progress_v1"],
         },
         headers={"Cache-Control": "no-store"},
     )
@@ -305,6 +305,10 @@ def _validate_message(message: object) -> str | None:
         history_error = _validate_workout_history(payload)
         if history_error is not None:
             return history_error
+    elif event_type == "strength_progress_synced":
+        progress_error = _validate_strength_progress(payload)
+        if progress_error is not None:
+            return progress_error
     elif not _payload_has_safe_shape(payload):
         return "invalid_payload"
 
@@ -374,6 +378,42 @@ def _validate_message(message: object) -> str | None:
         ):
             return "invalid_command_ack"
 
+    return None
+
+
+def _validate_strength_progress(payload: dict[str, Any]) -> str | None:
+    """A signed, opt-in best-set-per-workout export, never active sets."""
+    if not set(payload).issubset({"records", "clear", "delivery_id"}):
+        return "invalid_strength_progress"
+    if payload.get("clear") is True:
+        return None if payload.get("records") in (None, []) else "invalid_strength_progress"
+    if "clear" in payload and payload["clear"] is not False:
+        return "invalid_strength_progress"
+    records = payload.get("records")
+    if not isinstance(records, list) or len(records) > 60:
+        return "invalid_strength_progress"
+    now = datetime.now(timezone.utc)
+    identifiers: set[str] = set()
+    for rec in records:
+        if not isinstance(rec, dict) or set(rec) != {
+            "id", "exercise", "reps", "weight_kg", "ended_at", "source",
+        }:
+            return "invalid_strength_progress"
+        ident, exercise = rec["id"], rec["exercise"]
+        if not isinstance(ident, str) or not 8 <= len(ident) <= 64:
+            return "invalid_strength_progress"
+        if ident in identifiers or not isinstance(exercise, str) or not 1 <= len(exercise.strip()) <= 64:
+            return "invalid_strength_progress"
+        identifiers.add(ident)
+        if rec["source"] != "completed_strength_set":
+            return "invalid_strength_progress"
+        if not isinstance(rec["reps"], int) or isinstance(rec["reps"], bool) or not 1 <= rec["reps"] <= 50:
+            return "invalid_strength_progress"
+        if not _number_in_range(rec["weight_kg"], 0.01, 2000):
+            return "invalid_strength_progress"
+        ended = _history_date(rec["ended_at"])
+        if ended is None or ended < now - timedelta(days=92) or ended > now + timedelta(days=1):
+            return "invalid_strength_progress"
     return None
 
 
@@ -1033,6 +1073,12 @@ def _apply_event(
         ):
             client.state.pop(key, None)
         _clear_live_state(client)
+
+    elif event_type == "strength_progress_synced":
+        if payload.get("clear") is True:
+            client.state.pop("strength_progress", None)
+        else:
+            client.state["strength_progress"] = payload["records"][:60]
 
     elif event_type == "workout_history_synced":
         if payload.get("clear") is True:
