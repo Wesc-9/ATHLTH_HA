@@ -57,7 +57,7 @@ test("all premium ATHLTH cards register once",()=>{
 
 test("dashboard uses brand logo and real sensor data",()=>{
   const html=card("athlth-dashboard-card",{}, {states:first});
-  assert.match(html,/PROGRESS LIVES HERE/);
+  assert.match(html,/PERFORMANCE \/ PERSONAL/);
   assert.match(html,/class="brandmark"/);
   assert.match(html,/75%/);
   assert.match(html,/Outdoor run/);
