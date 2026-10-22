@@ -633,3 +633,38 @@ test("updated ATHLTH sensors patch in place without replacing existing scroll no
     globalThis.document=realDocument;
   }
 });
+
+
+test("iPad kiosk uses the full ATHLTH grid and keeps HA navigation outside the card",()=>{
+  const html=card("athlth-dashboard-card",{kiosk:true},{states:first});
+  assert.match(html,/class="dashboard studio-dashboard kiosk-layout"/);
+  assert.match(html,/kiosk-jump-nav/);
+  assert.match(html,/data-athlth-section="04"/);
+  assert.match(html,/id="athlth-section-04"/);
+  assert.match(html,/@container \(min-width:720px\) and \(max-width:789px\)/);
+  assert.doesNotMatch(html,/hide_sidebar: true/);
+  const normal=card("athlth-dashboard-card",{}, {states:first});
+  assert.doesNotMatch(normal,/<nav class="kiosk-jump-nav"/);
+  assert.doesNotMatch(normal,/class="dashboard studio-dashboard kiosk-layout"/);
+});
+
+test("kiosk jump controls can reach performance section without replacing dashboard DOM",()=>{
+  const Card=registry.get("athlth-dashboard-card");
+  const c=new Card();
+  let callback;
+  const target={scrollIntoView(options){this.lastOptions=options;}};
+  c._root={
+    innerHTML:"",
+    addEventListener(type,fn){if(type==="click")callback=fn;},
+    getElementById(id){return id==="athlth-section-04"?target:null;}
+  };
+  c.hass={states:first};
+  c.setConfig({type:"custom:athlth-dashboard-card",kiosk:true});
+  c.connectedCallback();
+  assert.equal(typeof callback,"function");
+  callback({target:{closest(selector){
+    return selector==="[data-athlth-section]"?
+      {getAttribute(){return "04";}}:null;
+  }}});
+  assert.deepEqual(target.lastOptions,{block:"start",behavior:"smooth"});
+});
