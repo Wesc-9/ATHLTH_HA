@@ -216,6 +216,16 @@ class ATHLTHRuntimeData:
         payload = {
             "primary_pending_commands": self.primary_client.pending_commands,
             "primary_recent_workouts": self.primary_client.state.get("recent_workouts", [])[:10],
+            "primary_identity": {
+                key: self.primary_client.state.get(key)
+                for key in ("athlete_display_name", "athlete_avatar_url")
+            },
+            "primary_performance_records": self.primary_client.state.get(
+                "performance_records", []
+            ) or [],
+            "primary_received_personal_records": self.primary_client.state.get(
+                "received_personal_records", []
+            ) or [],
             "primary_calendar_events": self.primary_client.state.get(
                 "calendar_events",
                 [],
@@ -233,6 +243,14 @@ class ATHLTHRuntimeData:
                     "delivery_ids": client.delivery_ids,
                     "pending_commands": client.pending_commands,
                     "recent_workouts": client.state.get("recent_workouts", [])[:10],
+                    "identity": {
+                        key: client.state.get(key)
+                        for key in ("athlete_display_name", "athlete_avatar_url")
+                    },
+                    "performance_records": client.state.get("performance_records", []) or [],
+                    "received_personal_records": client.state.get(
+                        "received_personal_records", []
+                    ) or [],
                     "calendar_events": client.state.get(
                         "calendar_events",
                         [],
