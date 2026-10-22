@@ -52,6 +52,11 @@ SENSORS: tuple[SensorEntityDescription, ...] = (
         icon="mdi:trophy-outline",
     ),
     SensorEntityDescription(
+        key="strength_progress",
+        name="Consented completed strength progression",
+        icon="mdi:weight-lifter",
+    ),
+    SensorEntityDescription(
         key="workout_history",
         name="Consented 90-day workout history",
         icon="mdi:chart-timeline-variant",
@@ -401,6 +406,10 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                 len(events) if isinstance(events, list) else 0
             )
 
+        if key == "strength_progress":
+            values = self._client.state.get("strength_progress")
+            return len(values) if isinstance(values, list) else None
+
         if key == "workout_history":
             values = self._client.state.get("workout_history")
             return len(values) if isinstance(values, list) else None
@@ -503,6 +512,21 @@ class ATHLTHSensor(RestoreSensor, SensorEntity):
                     if self._client.state.get("performance_records")
                     else "received PR events"
                 )
+
+        if self.entity_description.key == "strength_progress":
+            records = self._client.state.get("strength_progress")
+            if isinstance(records, list):
+                attributes["records"] = [
+                    {
+                        field: value[field]
+                        for field in ("exercise", "reps", "weight_kg", "ended_at", "source")
+                        if field in value
+                    }
+                    for value in records[:60]
+                    if isinstance(value, dict)
+                ]
+                attributes["scope"] = "Finished workouts, completed working sets only"
+                attributes["provenance"] = "ATHLTH completed-strength-set logs"
 
         if self.entity_description.key == "workout_history":
             # Keep the HA state small even for a 90-session upload.
