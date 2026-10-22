@@ -29,7 +29,8 @@
 # athlth-history-card, athlth-status-card, athlth-tomorrow-card,
 # athlth-trend-card, athlth-mix-card, athlth-rhythm-card,
 # athlth-insight-card, athlth-feed-card, athlth-records-card,
-# athlth-data-card, athlth-long-trend-card.
+# athlth-data-card, athlth-long-trend-card,
+# athlth-strength-progress-card.
 #
 # Primary installation uses sensor.athlth_last_workout.
 # For additional accounts/devices, use the exact "Last workout" entity id
