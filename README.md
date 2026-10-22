@@ -199,6 +199,40 @@ integration, with no external CDN and no fake workout data.
 
 For a complete dashboard see [examples/premium-dashboard.yaml](examples/premium-dashboard.yaml).
 
+### ATHLTH 0.5.1 — iPad kiosk with Home Assistant sidebar
+
+Version 0.5.1 adds an **opt-in ATHLTH kiosk dashboard** specifically for
+iPad users who want a premium three-column training overview **without
+losing the Home Assistant navigation sidebar on the left**. Use the new
+[ready-made iPad YAML](examples/ipad-kiosk-dashboard.yaml) as a
+**separate user-managed dashboard**, and select **Show in sidebar** through
+Home Assistant's dashboard settings. The first view uses `panel: true`
+with `custom:athlth-dashboard-card` and `kiosk: true`. That `kiosk`
+flag affects only the ATHLTH card, not Home Assistant's shell. The
+third-party Kiosk Mode plugin is *not required*. If you have it installed,
+don't hide the HA sidebar or menu button.
+
+The iPad kiosk keeps the profile hero, latest workout with outdoor route,
+tomorrow's planned training, weekly progress, charts, personal achievements
+and actual data-coverage indicators. Touch-friendly quick navigation jumps
+between five sections. A separate detail view gives quick access to session
+history and verified records.
+
+**iPad fixes:** the card no longer replaces the complete Shadow DOM when HA
+pushes unrelated state changes. Its DOM update reuses unchanged elements,
+which addresses scroll reset on the iPad Home Assistant app. HA Sections
+can allocate the card all 12 grid columns; the included full-width Panel
+example is simplest. Three cards fit when the card itself has enough
+available width; narrower portrait or Split View layouts use two or one.
+The HA sidebar may automatically collapse in narrow iPad windows because
+that belongs to Home Assistant, not the ATHLTH card.
+
+Read the [full iPad UX and data-needs analysis](docs/IPAD_KIOSK_UX_REVIEW.md),
+[0.5.1 release notes](docs/releases/v0.5.1.md) and the
+[manual HA test checklist](docs/LIVE_HOME_ASSISTANT_CHECKLIST.md).
+The new software and dashboard YAML must still be **installed on your
+Home Assistant instance**; updating GitHub cannot edit a local dashboard.
+
 ### ATHLTH Home Assistant 0.5.0 — athlete profile, sessions and performance
 
 **Version 0.5.0 is committed on `main`, not published as a HACS release.**
