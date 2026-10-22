@@ -10,6 +10,7 @@ import json
 import re
 import secrets
 import time
+from urllib.parse import urlsplit
 from typing import Any
 
 from aiohttp import web
@@ -201,7 +202,7 @@ async def async_handle_webhook(
                 )
             )
         )
-        or event_type in {"workout_route_map", "workout_finished"}
+        or event_type in {"workout_route_map", "workout_finished", "personal_record"}
     ):
         await runtime.async_save_clients()
 
@@ -507,6 +508,59 @@ def _validate_snapshot_state(state: dict[str, Any]) -> str | None:
             continue
         if not _number_in_range(value, minimum, maximum):
             return f"invalid_{key}"
+
+    # Profile sharing is explicitly optional. Only our public avatar
+    # storage path is accepted; private IPs and arbitrary remote URLs are not.
+    display_name = state.get("athlete_display_name")
+    if display_name is not None and (
+        not isinstance(display_name, str)
+        or not 1 <= len(display_name.strip()) <= 80
+    ):
+        return "invalid_athlete_display_name"
+
+    avatar_url = state.get("athlete_avatar_url")
+    if avatar_url is not None:
+        if not isinstance(avatar_url, str) or len(avatar_url) > 512:
+            return "invalid_athlete_avatar_url"
+        parsed = urlsplit(avatar_url)
+        host = parsed.hostname or ""
+        if (
+            parsed.scheme != "https"
+            or not host.endswith(".supabase.co")
+            or not parsed.path.startswith(
+                "/storage/v1/object/public/profile-avatars/"
+            )
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port not in (None, 443)
+            or parsed.fragment
+        ):
+            return "invalid_athlete_avatar_url"
+
+    records = state.get("performance_records")
+    if records is not None:
+        if not isinstance(records, list) or len(records) > 12:
+            return "invalid_performance_records"
+        seen = set()
+        for record in records:
+            if not isinstance(record, dict) or not set(record).issubset(
+                {"id", "title", "value", "category", "date"}
+            ):
+                return "invalid_performance_records"
+            if not all(
+                isinstance(record.get(field), str)
+                and 1 <= len(record[field].strip()) <= max_length
+                for field, max_length in (
+                    ("id", 96), ("title", 96), ("value", 64),
+                    ("category", 32), ("date", 48)
+                )
+            ):
+                return "invalid_performance_records"
+            if record["category"] not in {"running", "strength", "other"}:
+                return "invalid_performance_records"
+            if record["id"] in seen:
+                return "invalid_performance_records"
+            seen.add(record["id"])
 
     app_foreground = state.get("app_foreground")
     if app_foreground is not None and type(app_foreground) is not bool:
@@ -950,6 +1004,29 @@ def _apply_event(
             or payload.get("workout_name")
         )
         client.state["next_workout_time"] = payload.get("scheduled_at")
+
+    elif event_type == "personal_record":
+        title = payload.get("title")
+        value = payload.get("value")
+        if isinstance(title, str) and title.strip() and isinstance(value, str) and value.strip():
+            previous = client.state.get("received_personal_records")
+            previous = previous if isinstance(previous, list) else []
+            record = {
+                "id": hashlib.sha256(
+                    (title + "\\x00" + value).encode("utf-8")
+                ).hexdigest()[:24],
+                "title": title[:96],
+                "value": value[:64],
+                "category": "other",
+                "date": str(now),
+            }
+            client.state["received_personal_records"] = [
+                record,
+                *(
+                    item for item in previous
+                    if isinstance(item, dict) and item.get("id") != record["id"]
+                ),
+            ][:10]
 
     elif event_type == "goal_completed":
         if payload.get("title"):
