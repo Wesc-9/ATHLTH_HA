@@ -119,6 +119,9 @@ LIVE_STATE_KEYS = frozenset(
 RESTORABLE_STATE_KEYS = frozenset(
     {
         "last_workout",
+        "athlete_display_name",
+        "athlete_avatar_url",
+        "performance_records",
         "recovery_score",
         "training_load",
         "weekly_progress",
