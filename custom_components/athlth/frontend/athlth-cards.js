@@ -207,12 +207,37 @@
     const type=String(a.type||"").toLowerCase();
     const indoor=/treadmill|indoor/.test(type);
     const strengthMode=/strength|weight|functional|lifting/.test(type);
-    const outdoor=!indoor&&!strengthMode&&/outdoor|run|walk|hike|cycling/.test(type);
+    const outdoor=!indoor&&!strengthMode&&/outdoor|run|walk|hik|cycl|bike|ride|trail/.test(type);
     const route=entity(hass,member,"last_workout_route");
     const routeEnd=route&&route.attributes&&route.attributes.ended_at;
-    const match=outdoor&&route&&usable(route)&&a.ended_at&&routeEnd&&
-      Math.abs(asDate(a.ended_at).getTime()-asDate(routeEnd).getTime())<180000;
-    const image=match?'<div class="map"><img loading="lazy" alt="Kart over siste utendørs treningsøkt" src="/api/camera_proxy/'+encodeURIComponent(route.entity_id)+'"></div>':"";
+    const activityEnd=a.ended_at?asDate(a.ended_at).getTime():NaN;
+    const mapEnd=routeEnd?asDate(routeEnd).getTime():NaN;
+    // Never display an old or indoor route as the latest outdoor workout.
+    const match=outdoor&&usable(route)&&Number.isFinite(activityEnd)&&
+      Number.isFinite(mapEnd)&&Math.abs(activityEnd-mapEnd)<180000;
+    const routeAttributes=route&&route.attributes||{};
+    const picture=routeAttributes.entity_picture;
+    const token=routeAttributes.access_token;
+    const safePicture=typeof picture==="string"&&
+      /^\/api\/camera_proxy\/[a-z0-9_.-]+(?:\?|$)/i.test(picture);
+    // HA camera images commonly require a short-lived access token. Prefer
+    // Home Assistant's signed entity_picture when one is provided.
+    const mapUrl=match?(safePicture?picture:
+      "/api/camera_proxy/"+encodeURIComponent(route.entity_id)+
+      (typeof token==="string"&&token?"?token="+encodeURIComponent(token):"")):"";
+    const visual=match?
+      '<div class="route-visual route-map">'+
+        '<img class="athlth-route-image" loading="lazy" alt="Kart fra siste utendørsøkt" src="'+esc(mapUrl)+'">'+
+        '<div class="route-overlay"><span class="route-label">DIN RUTE</span><span class="route-label">UTENDØRS</span></div>'+
+      '</div>':
+      '<div class="route-visual route-empty '+(strengthMode?'route-strength':'')+'">'+
+        '<div class="route-art" aria-hidden="true"><span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><span class="route-symbol">'+
+        (strengthMode?'✦':indoor?'▥':'↗')+'</span></div>'+
+        '<div class="route-placeholder-copy"><span class="route-label">'+(strengthMode?'STYRKE':indoor?'INNENDØRS':'AKTIVITET')+'</span>'+
+        '<p>'+(outdoor?'GPS-kart vises når ruten fra denne økten er delt.':
+          strengthMode?'Din styrkeøkt, samlet på ett sted.':
+          indoor?'Trening uten GPS-rute.':'Øktdata fra ATHLTH.')+'</p></div>'+
+      '</div>';
     const number=(key)=>a[key]!=null&&a[key]!==""&&Number.isFinite(Number(a[key]))?Number(a[key]):null;
     const meters=number("distance_meters");
     const seconds=number("duration_seconds");
@@ -220,30 +245,34 @@
     const bpm=number("average_heart_rate_bpm");
     const energy=number("active_energy_kcal");
     const climb=number("elevation_gain_meters");
-    const paceText=pace===null||pace<=0?"—":Math.floor(pace/60)+":"+String(Math.round(pace%60)).padStart(2,"0");
-    const distance=meters===null?"—":fmt(meters/1000,2);
-    const time=duration(seconds);
+    const matchPercent=number("route_match_percent");
+    const paceMinutes=pace!==null&&pace>0?Math.floor(Math.round(pace)/60):null;
+    const paceSeconds=pace!==null&&pace>0?Math.round(pace)%60:null;
+    const paceText=paceMinutes===null?"—":paceMinutes+":"+String(paceSeconds).padStart(2,"0");
     const stats=strengthMode?[
-      ["Varighet",time,""],
+      ["Varighet",duration(seconds),""],
       ["Energi",fmt(energy),"kcal"],
       ["Snittpuls",fmt(bpm),"bpm"]
     ]:[
-      ["Distanse",distance,"km"],
-      ["Varighet",time,""],
+      ["Distanse",meters===null?"—":fmt(meters/1000,2),"km"],
+      ["Varighet",duration(seconds),""],
       ["Tempo",paceText,"/km"],
       ["Snittpuls",fmt(bpm),"bpm"]
     ];
     if(outdoor&&climb!==null)stats.push(["Høydemeter",fmt(climb),"m"]);
-    const metrics='<div class="stats cols-3">'+stats.map(v=>statistic(...v)).join("")+'</div>';
-    const icon=strengthMode?"✦":indoor?"▤":"↗";
-    const classification=strengthMode?"Styrke":indoor?"Løping innendørs":outdoor?"Utendørsaktivitet":"Fullført aktivitet";
+    if(outdoor&&matchPercent!==null)stats.push(["Rutefølge",fmt(matchPercent),"%"]);
+    const classification=strengthMode?"Styrke":indoor?"Løping innendørs":
+      outdoor?"Utendørsaktivitet":"Fullført aktivitet";
     const source=a.device?'<span class="chip">'+esc(String(a.device))+'</span>':"";
-    return card("Siste økt",image+
-      '<div class="activity-hero"><span class="glyph">'+icon+'</span><div>'+
-      '<div class="eyebrow">'+esc(classification)+'</div>'+
-      '<div class="activity-name">'+esc(name)+'</div>'+
-      '<div class="muted">'+esc(niceDate(a.ended_at)||"Fullført økt")+'</div>'+
-      '</div></div>'+metrics+source+lastSync(hass,member));
+    return card("Siste økt",
+      '<div class="last-workout-layout">'+visual+
+      '<div class="last-summary">'+
+        '<div class="eyebrow">'+esc(classification)+'</div>'+
+        '<div class="activity-name">'+esc(name)+'</div>'+
+        '<div class="muted">'+esc(niceDate(a.ended_at)||"Fullført økt")+'</div>'+
+        '<div class="stats cols-3">'+stats.map(v=>statistic(...v)).join("")+'</div>'+
+        '<div class="last-foot">'+source+lastSync(hass,member)+'</div>'+
+      '</div></div>');
   }
   function plan(hass,member) {
     const program=entity(hass,member,"training_plan");
@@ -385,7 +414,28 @@
   function dashboard(hass,members,selected) {
     const member=members[selected]||members[0];
     const chooser=members.length>1?'<div class="member-tabs" role="group" aria-label="Velg familiemedlem">'+members.map((m,i)=>'<button type="button" data-athlth-member="'+i+'" class="'+(i===selected?"selected":"")+'">'+esc(m.name||"Medlem "+(i+1))+'</button>').join("")+'</div>':"";
-    return '<div class="dashboard"><div class="dashboard-head"><div class="dashboard-brand">'+logo()+'<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+statusPill(hass,member)+'</div>'+chooser+'<div class="dashboard-grid"><div class="wide">'+statusCard(hass,member)+'</div><div class="wide">'+week(hass,member)+'</div><div>'+today(hass,member)+'</div><div>'+next(hass,member)+'</div><div class="wide">'+last(hass,member)+'</div><div>'+plan(hass,member)+'</div><div>'+recovery(hass,member)+'</div><div class="wide">'+calendar(hass,member)+'</div><div class="wide">'+history(hass,member)+'</div>'+(members.length>1?'<div class="wide">'+family(hass,members)+'</div>':"")+'<div class="wide">'+active(hass,member)+'</div></div></div>';
+    const intro='<div class="dashboard-intro"><div><div class="eyebrow">DITT TRENINGSSENTER</div>'+
+      '<h2>Oversikt som motiverer.</h2><p>Økter, fremgang og restitusjon — samlet fra ATHLTH.</p></div>'+
+      '<div class="dashboard-intro-mark" aria-hidden="true">A<span>•</span></div></div>';
+    return '<div class="dashboard">'+
+      '<div class="dashboard-head"><div class="dashboard-brand">'+logo()+
+      '<div class="subbrand">PROGRESS LIVES HERE.</div></div>'+statusPill(hass,member)+'</div>'+
+      intro+chooser+
+      '<div class="dashboard-grid">'+
+        '<div class="feature-card span-2">'+last(hass,member)+'</div>'+
+        '<div class="week-card">'+week(hass,member)+'</div>'+
+        '<div>'+today(hass,member)+'</div>'+
+        '<div>'+recovery(hass,member)+'</div>'+
+        '<div>'+next(hass,member)+'</div>'+
+        '<div class="span-2">'+calendar(hass,member)+'</div>'+
+        '<div>'+plan(hass,member)+'</div>'+
+        '<div>'+goals(hass,member)+'</div>'+
+        '<div>'+active(hass,member)+'</div>'+
+        '<div>'+statusCard(hass,member)+'</div>'+
+        '<div class="span-2">'+history(hass,member)+'</div>'+
+        '<div>'+strength(hass,member)+'</div>'+
+        (members.length>1?'<div class="span-3">'+family(hass,members)+'</div>':"")+
+      '</div></div>';
   }
   function today(hass,member){
     const schedule=entity(hass,member,"training_schedule");
@@ -425,9 +475,17 @@
     '.status-pill{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:750;white-space:nowrap;border-radius:100px;padding:6px 10px;border:1px solid var(--divider-color,#ddd);background:var(--secondary-background-color,#f3f3f3);color:var(--ath-muted)}.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#969699;flex-shrink:0}.status-pill.status-online{background:color-mix(in srgb,#317960 11%,var(--card-background-color,#fff));border-color:color-mix(in srgb,#317960 28%,transparent);color:#317960}.status-online .status-dot{background:#317960}.status-pill.status-training{background:color-mix(in srgb,var(--ath-gold) 14%,var(--card-background-color,#fff));border-color:color-mix(in srgb,var(--ath-gold) 38%,transparent);color:#9d713d}.status-training .status-dot{background:var(--ath-gold)}.status-pill.status-offline{opacity:.78}.status-pill.status-unknown{opacity:.7}.status-feature{display:flex;gap:14px;align-items:center}.status-name{flex:1;min-width:0}.avatar-status{position:relative;background:color-mix(in srgb,var(--ath-gold) 9%,var(--secondary-background-color,#eee));font-size:13px;font-weight:800;color:var(--ath-text);border:2px solid var(--divider-color,#ddd)}.avatar-status.status-training{border-color:var(--ath-gold)}.avatar-status.status-online{border-color:#317960}.avatar-status.status-offline{border-color:#9c9ca3}.family-identity{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.family-identity .status-pill{padding:3px 7px;font-size:10px}.family-identity .status-dot{width:6px;height:6px}',
     '.dashboard{display:block}.dashboard-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;padding:0 4px;flex-wrap:wrap}.dashboard-head .brand{font-size:20px;letter-spacing:4px;gap:7px}.dashboard-head .brandmark{height:44px;width:44px}.subbrand{font-size:9px;letter-spacing:2px;color:var(--ath-muted);font-weight:700;padding-left:51px}',
     '.dashboard-brand{display:flex;flex-direction:column;align-items:flex-start;gap:3px}',
-    '.dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.dashboard-grid>.wide{grid-column:span 2}.dashboard-grid>div{min-width:0}.dashboard-grid ha-card{height:100%}',
+    '.dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:stretch}.dashboard-grid>div{min-width:0}.dashboard-grid ha-card{height:100%}.dashboard-grid .card-head .brand{display:none}.dashboard-grid .card-head{margin-bottom:20px}.dashboard-grid .section-title{text-align:left;text-transform:uppercase;font-size:10px;letter-spacing:1.4px;font-weight:800}.dashboard-grid .body{padding:22px}.dashboard-grid .feature-card ha-card{border-color:color-mix(in srgb,var(--ath-gold) 24%,var(--divider-color,#eee))}',
+
+    '.dashboard{container-type:inline-size;max-width:1640px;margin:0 auto;padding:4px 3px 22px}.dashboard-intro{display:flex;justify-content:space-between;align-items:center;gap:20px;overflow:hidden;position:relative;margin:0 0 18px;padding:22px 26px;border:1px solid color-mix(in srgb,var(--ath-gold) 20%,var(--divider-color,#ddd));border-radius:23px;background:linear-gradient(115deg,color-mix(in srgb,var(--ath-gold) 12%,var(--card-background-color,#fff)),var(--card-background-color,#fff) 68%)}.dashboard-intro h2{font-size:clamp(23px,2.3vw,34px);letter-spacing:-.8px;line-height:1.15;margin:8px 0}.dashboard-intro p{font-size:12px;line-height:1.5;color:var(--ath-muted);margin:0}.dashboard-intro-mark{color:color-mix(in srgb,var(--ath-gold) 47%,transparent);font-size:80px;font-weight:900;line-height:1;letter-spacing:-8px;transform:rotate(-9deg);user-select:none}.dashboard-intro-mark span{font-size:20px;vertical-align:top;letter-spacing:0}',
+    '.dashboard-grid ha-card{transition:border-color .2s ease,box-shadow .2s ease}.dashboard-grid .week-card ha-card{background:linear-gradient(145deg,color-mix(in srgb,var(--ath-gold) 9%,var(--card-background-color,#fff)),var(--card-background-color,#fff) 70%)}.dashboard-grid .week-card .week-feature{gap:10px;flex-wrap:wrap}.dashboard-grid .week-card .ring{width:88px;height:88px}.dashboard-grid .week-card .ring span{height:70px;width:70px}.dashboard-grid .week-card .stats{gap:7px}.dashboard-grid .week-card .stat-value{font-size:15px}',
+    '.last-workout-layout{display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:20px;min-width:0}.last-summary{display:flex;flex-direction:column;min-width:0;justify-content:center}.last-summary .activity-name{font-size:clamp(21px,2vw,28px);line-height:1.18;letter-spacing:-.7px;margin:8px 0 7px}.last-summary .stats{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:20px;gap:18px 13px}.last-summary .stat-value{font-size:20px}.last-summary .stat-label{font-size:10px}.last-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:15px}.last-foot .chip,.last-foot .sync{margin:0}',
+    '.route-visual{position:relative;overflow:hidden;min-height:250px;border-radius:18px;background:color-mix(in srgb,var(--ath-gold) 8%,var(--secondary-background-color,#f2f0ed))}.route-map img{display:block;width:100%;height:100%;min-height:250px;object-fit:cover;position:absolute;inset:0}.route-overlay{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:12px;pointer-events:none;background:linear-gradient(to bottom,rgba(17,20,22,.23),transparent 40%)}.route-label{display:inline-flex;align-items:center;background:rgba(255,255,255,.92);color:#242322;border-radius:100px;padding:7px 10px;font-size:9px;font-weight:850;letter-spacing:1px}.route-empty{display:flex;align-items:flex-end;isolation:isolate;background:radial-gradient(circle at 85% 10%,color-mix(in srgb,var(--ath-gold) 22%,transparent),transparent 47%),linear-gradient(140deg,#252b30,#10181f);color:#fff}.route-strength{background:radial-gradient(circle at 85% 15%,#8c684b,transparent 56%),linear-gradient(140deg,#2c3034,#151719)}.route-art{position:absolute;inset:0;overflow:hidden;display:grid;place-items:center;opacity:.8}.orbit{position:absolute;width:62%;aspect-ratio:1;border:1px solid rgba(255,255,255,.12);border-radius:50%;transform:rotate(-22deg) scaleX(1.4)}.orbit-two{width:90%;transform:rotate(34deg) scaleX(1.2);border-color:rgba(255,255,255,.08)}.route-symbol{font-size:76px;color:color-mix(in srgb,var(--ath-gold) 64%,#fff);font-weight:300;line-height:1;transform:translateY(-9px)}.route-placeholder-copy{z-index:1;padding:20px;max-width:290px}.route-placeholder-copy p{color:rgba(255,255,255,.87);font-size:12px;line-height:1.45;margin:10px 0 0}.route-placeholder-copy .route-label{background:rgba(255,255,255,.12);color:#fff}',
     '.member-tabs{display:flex;gap:7px;overflow-x:auto;margin:0 0 18px;padding:3px 0 8px}.member-tabs button{border:1px solid var(--divider-color,#ddd);border-radius:100px;background:var(--card-background-color,#fff);color:var(--ath-text);font:600 12px inherit;padding:9px 17px;cursor:pointer;white-space:nowrap}.member-tabs button.selected{border-color:var(--ath-gold);background:color-mix(in srgb,var(--ath-gold) 13%,var(--card-background-color,#fff))}',
-    '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.dashboard-grid{grid-template-columns:minmax(0,1fr)}.dashboard-grid>.wide{grid-column:span 1}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
+    '@container (min-width:620px){.dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-grid>.span-2,.dashboard-grid>.span-3{grid-column:span 2}.last-workout-layout{grid-template-columns:1.05fr 1fr}.route-visual{min-height:274px}}',
+    '@container (min-width:940px){.dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-grid>.span-3{grid-column:span 3}.dashboard-grid>.span-2{grid-column:span 2}.last-workout-layout{grid-template-columns:1.05fr 1fr}.dashboard-intro{padding:26px 32px}}',
+    '@container (max-width:619px){.dashboard-grid>.span-2,.dashboard-grid>.span-3{grid-column:auto}.last-workout-layout{grid-template-columns:1fr}.route-visual{min-height:220px}.dashboard-grid .body{padding:18px}.dashboard-intro{padding:20px}.dashboard-intro-mark{display:none}.dashboard-intro h2{font-size:23px}.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}',
+    '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
   ].join("");
 
 
