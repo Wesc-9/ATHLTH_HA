@@ -137,3 +137,52 @@ async def test_multi_client_plan_and_recent_history_persist_independently():
     assert store.payload["primary_training_plan"] is None
     assert store.payload["primary_recent_workouts"] == []
     assert store.payload["clients"]["device-b"]["training_plan"]["id"] == "plan-b"
+
+
+async def test_profile_and_pr_records_persist_without_cross_client_leakage():
+    class CapturingStore:
+        payload = None
+
+        async def async_save(self, payload):
+            self.payload = payload
+
+    store = CapturingStore()
+    a = ATHLTHClientRuntime(
+        client_id="device-a", name="A", shared_secret="secret-a", is_primary=True,
+        state={
+            "athlete_display_name": "Athlete A",
+            "athlete_avatar_url": "https://a.supabase.co/storage/v1/object/public/profile-avatars/a/avatar.jpg",
+            "performance_records": [{
+                "id": "best-5k", "title": "5K", "value": "20:00",
+                "category": "running", "date": "2026-10-22T10:00:00Z",
+            }],
+        },
+    )
+    b = ATHLTHClientRuntime(
+        client_id="device-b", name="B", shared_secret="secret-b",
+        state={
+            "athlete_display_name": "Athlete B",
+            "performance_records": [{
+                "id": "bench", "title": "Bench", "value": "90 kg",
+                "category": "strength", "date": "2026-10-22T11:00:00Z",
+            }],
+        },
+    )
+    runtime = ATHLTHRuntimeData(
+        entry_id="entry", webhook_id="webhook", webhook_url="/api/webhook/webhook",
+        clients={a.client_id: a, b.client_id: b},
+        primary_client_id=a.client_id, client_store=store,
+    )
+    await runtime.async_save_clients()
+    assert store.payload["primary_identity"]["athlete_display_name"] == "Athlete A"
+    assert store.payload["primary_performance_records"][0]["value"] == "20:00"
+    assert store.payload["clients"]["device-b"]["identity"]["athlete_display_name"] == "Athlete B"
+    assert store.payload["clients"]["device-b"]["performance_records"][0]["value"] == "90 kg"
+
+    a.state["athlete_display_name"] = None
+    a.state["athlete_avatar_url"] = None
+    a.state["performance_records"] = []
+    await runtime.async_save_clients()
+    assert store.payload["primary_identity"]["athlete_avatar_url"] is None
+    assert store.payload["primary_performance_records"] == []
+    assert store.payload["clients"]["device-b"]["identity"]["athlete_display_name"] == "Athlete B"
