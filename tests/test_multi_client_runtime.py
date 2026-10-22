@@ -224,3 +224,39 @@ async def test_90_day_history_persists_per_athlete_and_revocation_is_isolated():
     await runtime.async_save_clients()
     assert store.payload["primary_workout_history"] == []
     assert store.payload["clients"]["b"]["workout_history"][0]["id"] == "workout-b"
+
+
+async def test_confirmed_strength_progress_persists_per_client_without_workout_ids():
+    from datetime import datetime, timezone
+    class CaptureStore:
+        data = None
+        async def async_save(self, payload):
+            self.data = payload
+    date = datetime.now(timezone.utc).isoformat()
+    record = {
+        "id": "a" * 32, "exercise": "Bench press",
+        "reps": 5, "weight_kg": 65,
+        "ended_at": date, "source": "completed_strength_set",
+    }
+    primary = ATHLTHClientRuntime(
+        client_id="primary", name="Primary", shared_secret="secret", is_primary=True,
+        state={"strength_progress": [record]},
+    )
+    friend = ATHLTHClientRuntime(
+        client_id="friend", name="Friend", shared_secret="different",
+        state={"strength_progress": [{**record, "id": "b" * 32}]},
+    )
+    store = CaptureStore()
+    runtime = ATHLTHRuntimeData(
+        entry_id="entry", webhook_id="webhook",
+        webhook_url="/api/webhook/id", clients={
+            "primary": primary, "friend": friend,
+        }, primary_client_id="primary", client_store=store,
+    )
+    await runtime.async_save_clients()
+    assert store.data["primary_strength_progress"][0]["id"] == "a" * 32
+    assert store.data["clients"]["friend"]["strength_progress"][0]["id"] == "b" * 32
+    primary.state.pop("strength_progress")
+    await runtime.async_save_clients()
+    assert store.data["primary_strength_progress"] == []
+    assert store.data["clients"]["friend"]["strength_progress"][0]["id"] == "b" * 32
