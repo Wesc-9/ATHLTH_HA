@@ -30,7 +30,8 @@
     "athlth-insight-card": ["ATHLTH Treningsinnsikt", "Forklarende innsikt fra faktisk delte verdier."],
     "athlth-feed-card": ["ATHLTH Øktlogg", "De siste fullførte øktene som Home Assistant har mottatt."],
     "athlth-records-card": ["ATHLTH Prestasjoner", "Delte personlige rekorder fra ATHLTH."],
-    "athlth-data-card": ["ATHLTH Datagrunnlag", "Hva er tilgjengelig for analyser og hva mangler."]
+    "athlth-data-card": ["ATHLTH Datagrunnlag", "Hva er tilgjengelig for analyser og hva mangler."],
+    "athlth-long-trend-card": ["ATHLTH Treningshistorikk", "Personvernvennlig 30/90-dagers aktivitetsoversikt fra Apple Health."]
   };
   const SUFFIX = {
     presence: "presence",
@@ -44,6 +45,7 @@
     next_workout_time: "next_workout_time",
     last_workout: "last_workout",
     recent_workouts: "recent_workouts",
+    workout_history: "workout_history",
     recovery_score: "recovery_score",
     recovery_state: "recovery_state",
     sleep_duration: "sleep_duration_minutes",
@@ -504,6 +506,7 @@
       ["Treningsplan",!!valueOf(entity(hass,member,"training_plan"))],
       ["Restitusjon",num(entity(hass,member,"recovery_score"))!==null],
       ["Økthistorikk",receivedWorkouts(hass,member).length>0],
+      ["30/90-dagers historikk",!!(entity(hass,member,"workout_history")&&Array.isArray(entity(hass,member,"workout_history").attributes?.days))],
       ["Prestasjoner",!!(entity(hass,member,"performance_records")&&
          Number(valueOf(entity(hass,member,"performance_records")))>0)],
       ["Rutekart",!!(entity(hass,member,"last_workout_route")&&
@@ -519,7 +522,7 @@
       lastSync(hass,member));
   }
 
-  function dashboard(hass,members,selected,kiosk=false) {
+  function dashboard(hass,members,selected,kiosk=false,range=30) {
     const member=members[selected]||members[0];
     const now=new Date();
     const dateline=now.toLocaleDateString("nb-NO",{weekday:"long",day:"numeric",month:"long"});
@@ -561,6 +564,7 @@
       '<div class="week-card">'+week(hass,member)+'</div>'+
       '<div>'+plan(hass,member)+'</div>'+
       '<div class="span-2">'+calendar(hass,member)+'</div>'+
+      '<div class="span-3 long-trend-area">'+longTrend(hass,member,range)+'</div>'+
       section("03","Se mønstrene","Oversikt over treningsfordeling og dagsform.")+
       '<div>'+rhythm(hass,member)+'</div>'+
       '<div>'+workoutMix(hass,member)+'</div>'+
@@ -652,6 +656,51 @@
       '<div class="tomorrow-footer">'+(schedule.length?fmt(schedule.length)+" planlagt"+(schedule.length===1?" økt":"e økter"):
       "Se treningsplanen i ATHLTH")+'</div></div>');
   }
+
+  function longTrend(hass,member,days=30){
+    const sensor=entity(hass,member,"workout_history");
+    const raw=sensor&&sensor.attributes&&sensor.attributes.days;
+    const records=Array.isArray(raw)?raw.slice(0,90):[];
+    const range=days===90?90:30;
+    const label='<div class="long-range-switch" role="group" aria-label="Velg analyseperiode">'+
+      '<button type="button" data-athlth-range="30" aria-pressed="'+(range===30)+'" class="'+(range===30?'active':'')+'">30 dager</button>'+
+      '<button type="button" data-athlth-range="90" aria-pressed="'+(range===90)+'" class="'+(range===90?'active':'')+'">90 dager</button></div>';
+    if(!records.length)return card("Langtidsutvikling",
+      '<div class="long-summary">'+label+'</div>'+
+      empty("Historiske øktsammendrag er ikke delt.")+
+      '<p class="note">Aktiver «Treningshistorikk · 90 dager» i ATHLTH → Home Assistant. Ingen GPS-ruter eksporteres.</p>');
+    const until=dayStart(new Date()),since=addDays(until,-range+1);
+    const counts=Array.from({length:Math.ceil(range/7)},()=>({minutes:0,sessions:0,km:0,seen:0}));
+    let total=0,minutes=0,km=0;
+    for(const r of records){
+      if(!r||typeof r.date!=="string")continue;
+      const day=asDate(r.date+"T12:00:00");
+      if(!Number.isFinite(day.getTime())||day<since||day>until)continue;
+      const idx=Math.floor(Math.floor((day-since)/86400000)/7);
+      if(idx<0||idx>=counts.length)continue;
+      const mins=Number(r.minutes),sessions=Number(r.sessions),dist=Number(r.distance_km);
+      if(!Number.isFinite(mins)||mins<0||mins>10080||!Number.isFinite(sessions)||sessions<0||sessions>50)continue;
+      counts[idx].minutes+=mins;counts[idx].sessions+=sessions;counts[idx].seen++;
+      if(Number.isFinite(dist)&&dist>=0)counts[idx].km+=dist;
+      total+=sessions;minutes+=mins;
+      if(Number.isFinite(dist)&&dist>=0)km+=dist;
+    }
+    const max=Math.max(1,...counts.map(b=>b.minutes));
+    const graph=counts.map((v,i)=>{
+      const labelText=range===30?"Uke "+(i+1):"U"+(i+1);
+      return '<div class="long-bar-group" title="'+esc(labelText+": "+fmt(v.minutes)+" min · "+fmt(v.sessions)+" økter")+'">'+
+        '<div class="long-bar-track">'+(v.minutes>0?'<span class="long-bar-fill" style="height:'+Math.min(100,v.minutes/max*100).toFixed(1)+'%"></span>':"")+
+        '</div><small>'+esc(labelText)+'</small></div>';
+    }).join("");
+    return card("Langtidsutvikling",
+      '<div class="long-summary">'+
+      '<div class="long-stat"><strong>'+fmt(total)+'</strong><span>økter</span></div>'+
+      '<div class="long-stat"><strong>'+fmt(minutes)+'</strong><span>minutter</span></div>'+
+      '<div class="long-stat"><strong>'+fmt(km,1)+'</strong><span>km fra Health</span></div>'+label+'</div>'+
+      '<div class="long-chart" role="img" aria-label="'+esc("Treningsminutter per uke fra delte Apple Health-sammendrag siste "+range+" dager")+'">'+graph+'</div>'+
+      '<p class="note">Kilde: Apple Health. Maks 90 økter, ikke nødvendigvis all trening. Distanse kan være målt, beregnet eller manuelt registrert; opphav er ikke verifisert.</p>');
+  }
+
   function trend(hass,member){
     const records=receivedWorkouts(hass,member);
     const end=dayStart(new Date()),start=addDays(end,-6),future=addDays(end,1);
@@ -832,6 +881,8 @@
 
     '.studio-dashboard.kiosk-layout .kiosk-jump-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 18px;padding:2px 0 6px}.studio-dashboard.kiosk-layout .kiosk-jump-label{font-size:9px;font-weight:850;letter-spacing:1px;color:#9d7c5c;margin-right:4px}.studio-dashboard.kiosk-layout .kiosk-jump-nav button{min-height:39px;border-radius:999px;border:1px solid #dfd9d0;background:#fff;color:#5b605a;font-family:inherit;font-size:11px;font-weight:730;padding:9px 13px;cursor:pointer;touch-action:manipulation}.studio-dashboard.kiosk-layout .kiosk-jump-nav button:focus-visible{outline:3px solid #be9462;outline-offset:2px}.studio-dashboard.kiosk-layout .studio-section-title{scroll-margin-top:15px}',
     '@container (min-width:720px) and (max-width:789px){.studio-dashboard.kiosk-layout .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.studio-dashboard.kiosk-layout .dashboard-grid>.span-2{grid-column:span 2}.studio-dashboard.kiosk-layout .dashboard-grid>.span-3{grid-column:span 3}.studio-dashboard.kiosk-layout .dashboard-grid .body{padding:16px}.studio-dashboard.kiosk-layout .record-grid{grid-template-columns:1fr}.studio-dashboard.kiosk-layout .hero-signals{gap:1px}}',
+    '.studio-dashboard .long-summary{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.studio-dashboard .long-stat{display:flex;flex-direction:column;gap:3px}.studio-dashboard .long-stat strong{font-size:24px;letter-spacing:-.8px;color:#283030}.studio-dashboard .long-stat span{font-size:10px;color:#868983}.studio-dashboard .long-range-switch{display:flex;gap:4px;padding:3px;margin-left:auto;background:#f2f0ed;border-radius:999px}.studio-dashboard .long-range-switch button{min-height:36px;padding:7px 13px;border:0;border-radius:999px;background:transparent;color:#717773;font-family:inherit;font-weight:720;font-size:11px;cursor:pointer;touch-action:manipulation}.studio-dashboard .long-range-switch button.active{background:#26312f;color:#fff}.studio-dashboard .long-range-switch button:focus-visible{outline:3px solid #c7945e;outline-offset:2px}.studio-dashboard .long-chart{height:160px;display:flex;gap:7px;justify-content:space-around;align-items:stretch;padding:21px 1px 6px;border-bottom:1px solid #eceae4}.studio-dashboard .long-bar-group{min-width:0;flex:1;display:flex;flex-direction:column;gap:7px;align-items:center}.studio-dashboard .long-bar-track{height:120px;width:100%;max-width:56px;display:flex;align-items:flex-end;border-radius:7px;background:#f5f3ef;overflow:hidden}.studio-dashboard .long-bar-fill{display:block;width:100%;background:linear-gradient(0deg,#7f988e,#bd9a72);border-radius:7px 7px 0 0}.studio-dashboard .long-bar-group small{font-size:9px;color:#8b9088;white-space:nowrap}.studio-dashboard .long-trend-area .note{margin-top:14px}',
+    '@container (max-width:619px){.studio-dashboard .long-summary{gap:13px}.studio-dashboard .long-stat strong{font-size:19px}.studio-dashboard .long-range-switch{margin-left:0;width:100%;justify-content:center}.studio-dashboard .long-chart{gap:3px}.studio-dashboard .long-bar-group small{font-size:8px}}',
     '@media(prefers-reduced-motion:reduce){.studio-dashboard .dashboard-grid ha-card{transition:none}}',
     '@media(max-width:600px){.calendar-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.body{padding:17px}.dashboard-head{margin-bottom:12px}}'
   ].join("");
@@ -984,6 +1035,7 @@
         this._root=this.attachShadow({mode:"open"});
         this._config={type:"custom:"+kind};
         this._selected=0;
+        this._historyRange=30;
       }
       setConfig(config){
         if(!config || typeof config!=="object") throw new Error("ATHLTH-kort: ugyldig konfigurasjon.");
@@ -1003,6 +1055,16 @@
       static getConfigElement(){return document.createElement("athlth-config-editor");}
       connectedCallback(){
         this._root.addEventListener("click",(event)=>{
+          const rangeButton=event.target && event.target.closest &&
+            event.target.closest("[data-athlth-range]");
+          if(rangeButton){
+            const value=Number(rangeButton.getAttribute("data-athlth-range"));
+            if((value===30||value===90)&&this._historyRange!==value){
+              this._historyRange=value;
+              this.render();
+            }
+            return;
+          }
           const sectionButton=event.target&&event.target.closest&&
             event.target.closest("[data-athlth-section]");
           if(sectionButton){
@@ -1049,7 +1111,8 @@
           "athlth-feed-card":()=>activityFeed(this._hass,member),
           "athlth-records-card":()=>performance(this._hass,member),
           "athlth-data-card":()=>dataFoundation(this._hass,member),
-          "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected,this._config.kiosk===true)
+          "athlth-long-trend-card":()=>longTrend(this._hass,member,this._historyRange),
+          "athlth-dashboard-card":()=>dashboard(this._hass,members,this._selected,this._config.kiosk===true,this._historyRange)
         };
         updateCardMarkup(this._root,"<style>"+CSS+"</style>"+builders[kind]());
       }
