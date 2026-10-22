@@ -50,7 +50,7 @@ const second={
 };
 
 test("all premium ATHLTH cards register once",()=>{
-  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status","tomorrow","trend","mix","rhythm","insight","feed","records","data"];
+  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status","tomorrow","trend","mix","rhythm","insight","feed","records","data","long-trend"];
   for(const name of names)assert.ok(registry.has("athlth-"+name+"-card"),name);
   assert.equal(window.customCards.length,names.length);
 });
@@ -667,4 +667,49 @@ test("kiosk jump controls can reach performance section without replacing dashbo
       {getAttribute(){return "04";}}:null;
   }}});
   assert.deepEqual(target.lastOptions,{block:"start",behavior:"smooth"});
+});
+
+
+test("30/90-day chart uses ONLY Apple Health summary days and shows provenance",()=>{
+  const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const prev=new Date(today.getTime()-2*86400000);
+  const old=new Date(today.getTime()-62*86400000);
+  const days=[
+    {date:prev.toISOString().slice(0,10),sessions:2,minutes:50,distance_km:9},
+    {date:old.toISOString().slice(0,10),sessions:1,minutes:25,distance_km:5},
+  ];
+  const states={...first,"sensor.athlth_workout_history":state("3",{days})};
+  const normal=card("athlth-long-trend-card",{}, {states});
+  assert.match(normal,/30 dager/);
+  assert.match(normal,/90 dager/);
+  assert.match(normal,/3[0-9]*<\/strong>/);
+  assert.match(normal,/Kilde: Apple Health/);
+  assert.match(normal,/manuelt registrert/);
+  assert.doesNotMatch(normal,/22:01/);
+});
+
+test("90-day range switch is local to the card and never alters home assistant state",()=>{
+  const Custom=registry.get("athlth-long-trend-card");
+  const cardInstance=new Custom();
+  const old=new Date(Date.now()-58*86400000).toISOString().slice(0,10);
+  cardInstance.setConfig({type:"custom:athlth-long-trend-card"});
+  cardInstance.hass={states:{...first,"sensor.athlth_workout_history":state("1",{
+    days:[{date:old,sessions:1,minutes:30,distance_km:5}]
+  })}};
+  let callback=null;
+  cardInstance._root.addEventListener=(type,fn)=>{if(type==="click")callback=fn;};
+  cardInstance.connectedCallback();
+  const before=cardInstance._root.innerHTML;
+  callback({target:{closest(q){return q==="[data-athlth-range]"?{
+    getAttribute(){return "90";}
+  }:null;}}});
+  assert.equal(cardInstance._historyRange,90);
+  assert.match(cardInstance._root.innerHTML,/30<\/strong>/);
+  assert.notEqual(cardInstance._root.innerHTML,before);
+});
+
+test("history chart does not invent a trend when opt-in sync is absent",()=>{
+  const html=card("athlth-long-trend-card",{}, {states:first});
+  assert.match(html,/Historiske øktsammendrag er ikke delt/);
+  assert.doesNotMatch(html,/100 økter/);
 });
