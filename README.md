@@ -199,6 +199,43 @@ integration, with no external CDN and no fake workout data.
 
 For a complete dashboard see [examples/premium-dashboard.yaml](examples/premium-dashboard.yaml).
 
+### ATHLTH Home Assistant 0.5.0 — athlete profile, sessions and performance
+
+**Version 0.5.0 is committed on `main`, not published as a HACS release.**
+The bundled `custom:athlth-dashboard-card` now includes an athlete profile
+header, an actual last-session timeline, performance record tiles and a
+source-coverage summary alongside existing route, schedule, recovery and
+training charts. The new standalone cards are:
+`custom:athlth-feed-card`, `custom:athlth-records-card` and
+`custom:athlth-data-card`.
+
+The 0.5.0 sensor set adds `sensor.athlth_athlete_profile` and
+`sensor.athlth_performance_records` for the primary paired installation.
+Other paired installations receive their own unique entity IDs.
+Neither profile photos nor historical PR data are copied into this repo.
+
+**Opt-in in the iPhone app:** Open ATHLTH > Settings > Connections >
+Home Assistant. Enable **Utøverprofil** to share your display name and
+public avatar URL (off by default). Enable **PR-er og milepæler** to
+share up to twelve existing running and strength PRs from ATHLTH, and
+to allow new PR/milestone event delivery (off by default). Disable those
+toggles to clear the current shared entities. The database may still
+retain past Recorder entries until the HA owner purges them.
+
+To prevent disruption on an older HA integration, ATHLTH sends the extra
+profile/record snapshot fields only after receiving the signed webhook
+feature flag `profile_performance_snapshot_v1` from 0.5.0. The existing
+wire protocol remains version 1, with optional capabilities.
+
+The session list stores **up to ten completed events received since pairing**;
+this is not the full ATHLTH workout archive. Activity charts and the category
+ring have the same limitation. Real completion data, device source, distance
+and available heart-rate metrics are shown without inserting zeros.
+Personal records originate from ATHLTH, not from guesses made in Home
+Assistant. See [the product and data roadmap](docs/TRAINING_INTELLIGENCE_0_5_0.md)
+for the next reliable data layers (historical sync, interval records and
+exercise-level strength progression).
+
 ### Training Intelligence studio redesign
 
 The combined premium dashboard now has four intentionally structured parts:
