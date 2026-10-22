@@ -589,3 +589,75 @@ def test_record_events_are_deduplicated_and_cleared_when_sharing_is_revoked():
     assert athlete.state["performance_records"] == []
     assert "received_personal_records" not in athlete.state
     assert "performance_records" not in other.state
+
+
+def test_workout_history_export_requires_explicit_bounded_shape_no_gps():
+    """Summaries carry unverified provenance; no route or arbitrary health data."""
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    day = (now - timedelta(days=2)).isoformat()
+    started = (now - timedelta(days=2, hours=1)).isoformat()
+    entry = {
+        "id": "workout-uuid",
+        "type": "Running",
+        "started_at": started,
+        "ended_at": day,
+        "duration_seconds": 3600,
+        "distance_meters": 10000.0,
+        "active_energy_kcal": 400.0,
+        "environment": "outdoor",
+        "source": "apple_health",
+        "distance_provenance": "healthkit_unverified",
+    }
+    def check(workouts):
+        return _validate_message({
+            "event": "workout_history_synced",
+            "payload": {"workouts": workouts},
+        })
+
+    assert check([entry]) is None
+    assert check([]) is None
+    assert _validate_message({
+        "event": "workout_history_synced",
+        "payload": {"clear": True},
+    }) is None
+
+    assert check([{**entry, "route_points": [[60.1, 10.2]]}]) == "invalid_workout_history"
+    assert check([{**entry, "distance_provenance": "measured"}]) == "invalid_workout_history"
+    assert check([{**entry, "source": "fake_manual"}]) == "invalid_workout_history"
+    assert check([{**entry, "duration_seconds": -10}]) == "invalid_workout_history"
+    assert check([entry, entry]) == "invalid_workout_history"
+    assert check([entry] * 91) == "invalid_workout_history"
+    assert check([{**entry, "ended_at": "not a date"}]) == "invalid_workout_history"
+    assert _validate_message({
+        "event": "workout_history_synced",
+        "payload": {"clear": True, "workouts": [entry]},
+    }) == "invalid_workout_history"
+
+
+def test_workout_history_sync_replace_and_revoke_only_target_client():
+    from datetime import datetime, timedelta, timezone
+    from custom_components.athlth.runtime import ATHLTHClientRuntime
+    from custom_components.athlth.webhook import _apply_event
+    now = datetime.now(timezone.utc)
+    entry = {
+        "id": "my-run",
+        "type": "Running",
+        "started_at": (now - timedelta(hours=2)).isoformat(),
+        "ended_at": (now - timedelta(hours=1)).isoformat(),
+        "duration_seconds": 3600,
+        "environment": "outdoor",
+        "source": "apple_health",
+        "distance_provenance": "healthkit_unverified",
+    }
+    alice = ATHLTHClientRuntime(client_id="alice", name="A", shared_secret="a")
+    bob = ATHLTHClientRuntime(client_id="bob", name="B", shared_secret="b")
+    _apply_event(alice, "workout_history_synced", {"workouts": [entry]}, 1000)
+    assert len(alice.state["workout_history"]) == 1
+    assert "workout_history" not in bob.state
+    _apply_event(alice, "workout_history_synced", {"workouts": []}, 1001)
+    assert alice.state["workout_history"] == []
+    _apply_event(alice, "workout_history_synced", {"clear": True}, 1002)
+    assert "workout_history" not in alice.state
+    assert "workout_history" not in bob.state
