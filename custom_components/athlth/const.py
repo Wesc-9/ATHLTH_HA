@@ -53,6 +53,7 @@ SUPPORTED_EVENTS = frozenset(
         "workout_phase_updated",
         "workout_finished",
         "workout_history_synced",
+        "strength_progress_synced",
         "workout_route_map",
         "workout_cancelled",
         "strength_set_updated",
