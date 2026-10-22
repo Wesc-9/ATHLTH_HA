@@ -661,3 +661,65 @@ def test_workout_history_sync_replace_and_revoke_only_target_client():
     _apply_event(alice, "workout_history_synced", {"clear": True}, 1002)
     assert "workout_history" not in alice.state
     assert "workout_history" not in bob.state
+
+
+def test_finished_strength_progress_requires_exact_completed_set_evidence():
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    valid = {
+        "id": "a" * 32, "exercise": "Squat", "reps": 5,
+        "weight_kg": 100, "ended_at": (now - timedelta(days=1)).isoformat(),
+        "source": "completed_strength_set",
+    }
+    def validate(records):
+        return _validate_message({
+            "event": "strength_progress_synced",
+            "payload": {"records": records},
+        })
+
+    assert validate([valid]) is None
+    assert validate([]) is None
+    assert _validate_message({
+        "event": "strength_progress_synced",
+        "payload": {"clear": True},
+    }) is None
+    for bad in (
+        {**valid, "source": "planned_set"},
+        {**valid, "reps": 0},
+        {**valid, "weight_kg": 0},
+        {**valid, "weight_kg": 3000},
+        {**valid, "weight_kg": True},
+        {**valid, "reps": True},
+        {**valid, "route_points": [[60.2, 11.1]]},
+        {**valid, "ended_at": "invalid-date"},
+        {**valid, "exercise": "Z" * 100},
+        {**valid, "ended_at": (now - timedelta(days=100)).isoformat()},
+    ):
+        assert validate([bad]) == "invalid_strength_progress"
+    assert validate([valid, valid]) == "invalid_strength_progress"
+    assert validate([{**valid, "id": f"{i:032x}"} for i in range(61)]) == "invalid_strength_progress"
+    assert _validate_message({
+        "event": "strength_progress_synced",
+        "payload": {"clear": True, "records": [valid]},
+    }) == "invalid_strength_progress"
+
+
+def test_strength_progress_sync_clear_does_not_affect_other_athlete():
+    from datetime import datetime, timezone
+    from custom_components.athlth.webhook import _apply_event
+    from custom_components.athlth.runtime import ATHLTHClientRuntime
+    now = datetime.now(timezone.utc)
+    record = {
+        "id": "a" * 32, "exercise": "Squat", "reps": 5,
+        "weight_kg": 100, "ended_at": now.isoformat(),
+        "source": "completed_strength_set",
+    }
+    alice = ATHLTHClientRuntime(client_id="a", name="A", shared_secret="s")
+    bob = ATHLTHClientRuntime(client_id="b", name="B", shared_secret="t")
+    _apply_event(alice, "strength_progress_synced", {"records": [record]}, 1000)
+    _apply_event(bob, "strength_progress_synced", {"records": [{**record, "id": "b" * 32}]}, 1000)
+    assert alice.state["strength_progress"][0]["weight_kg"] == 100
+    assert bob.state["strength_progress"][0]["id"] == "b" * 32
+    _apply_event(alice, "strength_progress_synced", {"clear": True}, 1001)
+    assert "strength_progress" not in alice.state
+    assert len(bob.state["strength_progress"]) == 1
