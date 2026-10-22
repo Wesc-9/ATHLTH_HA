@@ -55,6 +55,8 @@ views:
         entity: sensor.athlth_last_workout
       - type: custom:athlth-long-trend-card
         entity: sensor.athlth_last_workout
+      - type: custom:athlth-strength-progress-card
+        entity: sensor.athlth_last_workout
       - type: custom:athlth-data-card
         entity: sensor.athlth_last_workout
 
