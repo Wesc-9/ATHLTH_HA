@@ -186,3 +186,41 @@ async def test_profile_and_pr_records_persist_without_cross_client_leakage():
     assert store.payload["primary_identity"]["athlete_avatar_url"] is None
     assert store.payload["primary_performance_records"] == []
     assert store.payload["clients"]["device-b"]["identity"]["athlete_display_name"] == "Athlete B"
+
+
+async def test_90_day_history_persists_per_athlete_and_revocation_is_isolated():
+    from datetime import datetime, timezone, timedelta
+    class CapturingStore:
+        payload = None
+        async def async_save(self, payload):
+            self.payload = payload
+
+    timestamp = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    item = {
+        "id": "workout-1", "type": "Running",
+        "started_at": timestamp, "ended_at": timestamp,
+        "duration_seconds": 1200, "environment": "unknown",
+        "source": "apple_health", "distance_provenance": "healthkit_unverified",
+    }
+    primary = ATHLTHClientRuntime(
+        client_id="a", name="A", shared_secret="a", is_primary=True,
+        state={"workout_history": [item]},
+    )
+    second = ATHLTHClientRuntime(
+        client_id="b", name="B", shared_secret="b",
+        state={"workout_history": [{**item, "id": "workout-b"}]},
+    )
+    store = CapturingStore()
+    runtime = ATHLTHRuntimeData(
+        entry_id="entry", webhook_id="webhook", webhook_url="/api/webhook/webhook",
+        clients={"a": primary, "b": second}, primary_client_id="a",
+        client_store=store,
+    )
+    await runtime.async_save_clients()
+    assert store.payload["primary_workout_history"][0]["id"] == "workout-1"
+    assert store.payload["clients"]["b"]["workout_history"][0]["id"] == "workout-b"
+
+    primary.state.pop("workout_history")
+    await runtime.async_save_clients()
+    assert store.payload["primary_workout_history"] == []
+    assert store.payload["clients"]["b"]["workout_history"][0]["id"] == "workout-b"
