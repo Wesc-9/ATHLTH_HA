@@ -50,7 +50,7 @@ const second={
 };
 
 test("all premium ATHLTH cards register once",()=>{
-  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status"];
+  const names=["dashboard","week","today","next","last","plan","family","recovery","active","calendar","goals","strength","history","status","tomorrow","trend","mix","rhythm","insight"];
   for(const name of names)assert.ok(registry.has("athlth-"+name+"-card"),name);
   assert.equal(window.customCards.length,names.length);
 });
@@ -381,4 +381,103 @@ test("an old route never appears for a more recent workout",()=>{
   const html=card("athlth-last-card",{}, {states});
   assert.doesNotMatch(html,/src="\/api\/camera_proxy\//);
   assert.match(html,/GPS-kart vises når ruten fra denne økten er delt/);
+});
+
+
+test("Training Intelligence creates four sections, visual charts and a three-column canvas",()=>{
+  const states={...first,"sensor.athlth_recent_workouts":state("2",{workouts:[
+    {id:"recent-1",name:"Recent strength",type:"strength",
+      ended_at:new Date().toISOString(),duration_seconds:3600},
+    {id:"recent-2",name:"Recent run",type:"outdoor_run",
+      ended_at:new Date(Date.now()-86400000).toISOString(),duration_seconds:1800}
+  ]})};
+  const html=card("athlth-dashboard-card",{}, {states});
+  for(const name of ["Nå og neste","Treningsgrunnlaget","Se mønstrene","Forstå fremgangen"]){
+    assert.match(html,new RegExp(name));
+  }
+  assert.match(html,/TRAINING INTELLIGENCE/);
+  assert.match(html,/grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(html,/class="feature-card span-2"/);
+  assert.match(html,/class="trend-chart"/);
+  assert.match(html,/class="mix-ring"/);
+  assert.match(html,/class="rhythm-grid"/);
+});
+
+test("tomorrow card shows only tomorrow planned workouts and does not invent sessions",()=>{
+  const now=new Date();
+  const tomorrow=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,18,30);
+  const yesterday=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1,18,30);
+  const states={...first,
+    "sensor.athlth_training_schedule":state("3",{events:[
+      {id:"tomorrow",title:"Tempo tomorrow",start:tomorrow.toISOString(),type:"run",status:"planned"},
+      {id:"past",title:"Yesterday workout",start:yesterday.toISOString(),type:"run",status:"completed"},
+      {id:"skipped",title:"Cancelled tomorrow",start:tomorrow.toISOString(),type:"run",status:"skipped"}
+    ]})};
+  const html=card("athlth-tomorrow-card",{}, {states});
+  assert.match(html,/Tempo tomorrow/);
+  assert.doesNotMatch(html,/Yesterday workout/);
+  assert.doesNotMatch(html,/Cancelled tomorrow/);
+  assert.match(html,/1 planlagt økt/);
+  const none=card("athlth-tomorrow-card",{}, {states:{...first,
+    "sensor.athlth_training_schedule":state("0",{events:[]}),
+    "sensor.athlth_next_workout":state("Training at an unknown time"),
+    "sensor.athlth_next_workout_time":state("unavailable")
+  }});
+  assert.match(none,/Ingen morgendagsøkt er delt/);
+  assert.doesNotMatch(none,/Training at an unknown time/);
+});
+
+test("tomorrow fallback uses next-workout only if date is confirmed tomorrow",()=>{
+  const d=new Date(),tomorrow=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,7,15);
+  const html=card("athlth-tomorrow-card",{}, {states:{
+    "sensor.athlth_last_workout":state("Run"),
+    "sensor.athlth_next_workout":state("Morning hike"),
+    "sensor.athlth_next_workout_time":state(tomorrow.toISOString())
+  }});
+  assert.match(html,/Morning hike/);
+});
+
+test("training trends use real received duration, ignore invalid and duplicate records",()=>{
+  const now=new Date().toISOString();
+  const records=[
+    {id:"same",name:"Run",type:"outdoor_run",ended_at:now,duration_seconds:1800},
+    {id:"same",name:"Duplicate",type:"outdoor_run",ended_at:now,duration_seconds:1800},
+    {id:"two",name:"Strength",type:"strength",ended_at:now,duration_seconds:3600},
+    {id:"missing",name:"Unknown",type:"strength",ended_at:now}
+  ];
+  const states={...first,"sensor.athlth_recent_workouts":state("4",{workouts:records})};
+  const html=card("athlth-trend-card",{}, {states});
+  assert.match(html,/90<small> min/);
+  assert.match(html,/3 økter/);
+  assert.match(html,/Varighet mangler for 1 økt/);
+  assert.match(html,/Utvalg: maks ti mottatte økter/);
+  const mix=card("athlth-mix-card",{}, {states});
+  assert.match(mix,/>3<\/strong><span>mottatt/);
+  assert.doesNotMatch(mix,/Duplicate/);
+});
+
+test("dashboard does not show fictional trends for missing shared history",()=>{
+  const html=card("athlth-dashboard-card",{}, {states:{}});
+  assert.match(html,/Ingen morgendagsøkt er delt/);
+  assert.match(html,/Ingen fullførte økter fra de siste syv dagene er mottatt/);
+  assert.match(html,/Fordelingen vises når fullførte økter er mottatt/);
+  assert.doesNotMatch(html,/class="trend-bar"/);
+  assert.doesNotMatch(html,/class="mix-ring"/);
+});
+
+test("training intelligence escapes untrusted names and members",()=>{
+  const states={...first,
+    "sensor.athlth_next_workout":state("<img src=x onerror=alert(1)>"),
+    "sensor.athlth_training_schedule":state("1",{events:[{
+      id:"1",title:"<script>evil()</script>",
+      start:new Date(Date.now()+86400000).toISOString(),status:"planned"
+    }]}),
+    "sensor.athlth_recent_workouts":state("1",{workouts:[{
+      id:"1",name:"Run",type:"<script>x</script>",ended_at:new Date().toISOString(),duration_seconds:600
+    }]})
+  };
+  const html=card("athlth-dashboard-card",{name:"<img src=x onerror=alert(1)>"},{states});
+  assert.doesNotMatch(html,/<script>evil/);
+  assert.doesNotMatch(html,/<img src=x/);
+  assert.match(html,/&lt;script&gt;evil/);
 });
