@@ -1,37 +1,176 @@
-# ATHLTH iPad / Kiosk – full width WITH Home Assistant left sidebar.
+# ATHLTH iPad — EKTE HOME ASSISTANT-SEKSJONER
 #
-# Create a *new, user-managed* Home Assistant dashboard, choose "Show in
-# sidebar" when creating it, and paste this into its raw YAML editor.
-# This is a separate dashboard. It does not overwrite your existing view.
+# Oversikt er en native Home Assistant Sections-visning, IKKE Panel og IKKE
+# ett stort custom:athlth-dashboard-card. Det finnes 7 reelle seksjoner.
+# Opptil 3 seksjoner ligger side ved side, begrenset av faktisk skjermbredde
+# etter at venstre Home Assistant-sidefelt er trukket fra. På smale iPads
+# flyttes seksjonene automatisk til 2 eller 1 kolonne uten horisontal scroll.
 #
-# IMPORTANT: The user requested the LEFT SIDEBAR to remain visible.
-# Therefore we deliberately do NOT use kiosk_mode: kiosk: true,
-# hide_sidebar: true, or hide_header: true. The ATHLTH "kiosk: true"
-# card option only changes the ATHLTH card's internal appearance; it does
-# not hide or modify the Home Assistant application shell.
+# Beholder Home Assistant-menyen til VENSTRE; ikke bruk hide_sidebar,
+# hide_header eller den eksterne kiosk-mode-integrasjonens fullscreen.
+# Lag et eget brukeradministrert dashboard og aktiver "Vis i sidefelt".
 #
-# The left sidebar may collapse when iPadOS uses a narrow window or
-# Split View. Reopen it using the Home Assistant sidebar/menu control.
-# Home Assistant controls that behavior, not the ATHLTH custom card.
+# GitHub-oppdateringer endrer ikke en allerede opprettet HA-visning.
+# Kopier YAML inn i dashboardets Råkonfigurasjonsredigerer.
+# Sensor-ID må samsvare med den faktiske ATHLTH-installasjonen i HA.
 #
-# Home Assistant Kiosk Mode is OPTIONAL. If installed as a separate HACS
-# frontend plugin, keep hide_sidebar: false and hide_header: false.
-# No plugin is needed for the ATHLTH kiosk card.
-#
-# "panel: true" = ONE outer ATHLTH card using the full space next to the
-# HA sidebar. The ATHLTH card internally renders multiple rows of cards:
-# roughly 3 columns on wide iPads, 2 or 1 on smaller available widths.
-#
-# After changing the dashboard: ensure the ATHLTH frontend resource is
-# loaded, restart HA after updating ATHLTH_HA, then reopen the iPad app
-# to refresh its cached frontend bundle.
-
-title: ATHLTH Kiosk
+title: ATHLTH iPad
 views:
-  - title: Treningsoversikt
+  - title: Oversikt
     path: oversikt
     icon: mdi:view-dashboard-outline
-    panel: true
+    type: sections
+    max_columns: 3
+    dense_section_placement: true
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Nå og neste
+            heading_style: title
+            icon: mdi:calendar-clock
+          - type: custom:athlth-status-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-today-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-tomorrow-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-active-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+      - type: grid
+        cards:
+          - type: heading
+            heading: Siste treningsøkt
+            heading_style: title
+            icon: mdi:run-fast
+          - type: custom:athlth-last-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-feed-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+      - type: grid
+        cards:
+          - type: heading
+            heading: Denne uken
+            heading_style: title
+            icon: mdi:chart-box-outline
+          - type: custom:athlth-week-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-trend-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-rhythm-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+      - type: grid
+        cards:
+          - type: heading
+            heading: Treningsplan
+            heading_style: title
+            icon: mdi:calendar-check-outline
+          - type: custom:athlth-plan-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-calendar-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-next-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+      - type: grid
+        cards:
+          - type: heading
+            heading: Belastning og dagsform
+            heading_style: title
+            icon: mdi:heart-pulse
+          - type: custom:athlth-recovery-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-mix-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-insight-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+      - type: grid
+        cards:
+          - type: heading
+            heading: Personlige rekorder
+            heading_style: title
+            icon: mdi:trophy-outline
+          - type: custom:athlth-records-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-long-trend-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-strength-progress-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+      - type: grid
+        cards:
+          - type: heading
+            heading: Mål og datakvalitet
+            heading_style: title
+            icon: mdi:target
+          - type: custom:athlth-goals-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+          - type: custom:athlth-data-card
+            entity: sensor.athlth_last_workout
+            grid_options:
+              columns: 12
+              rows: auto
+
+  # Reserveløsning / familiemodus: det gamle kombikortet i full bredde.
+  - title: Samlet
+    path: samlet
+    icon: mdi:monitor-dashboard
+    type: panel
     cards:
       - type: custom:athlth-dashboard-card
         kiosk: true
@@ -39,26 +178,5 @@ views:
           - name: Min trening
             entity: sensor.athlth_last_workout
 
-  # Optional second view: dedicated, simpler detail cards for checking a
-  # specific number without turning the main iPad overview into a form.
-  - title: Detaljer
-    path: detaljer
-    icon: mdi:chart-timeline-variant
-    cards:
-      - type: custom:athlth-last-card
-        entity: sensor.athlth_last_workout
-      - type: custom:athlth-feed-card
-        entity: sensor.athlth_last_workout
-      - type: custom:athlth-records-card
-        entity: sensor.athlth_last_workout
-      - type: custom:athlth-week-card
-        entity: sensor.athlth_last_workout
-      - type: custom:athlth-long-trend-card
-        entity: sensor.athlth_last_workout
-      - type: custom:athlth-strength-progress-card
-        entity: sensor.athlth_last_workout
-      - type: custom:athlth-data-card
-        entity: sensor.athlth_last_workout
-
-# For multiple family members add individual "members" entries with the
-# exact real last_workout entity IDs. Only shared data appears.
+# Seksjonene på Oversikt følger ett valgt sensor-anker. Bruk Samlet-fanen
+# for å veksle mellom familiemedlemmer via den eksisterende velgeren.
