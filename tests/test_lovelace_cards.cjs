@@ -772,3 +772,26 @@ test("strength exercise selector updates local card without resetting Home Assis
   assert.equal(component._strengthGroup,1);
   assert.match(component._root.innerHTML,/aria-pressed="true"/);
 });
+
+
+test("iPad and premium dashboard YAML provide native multi-column HA sections instead of one outer card",()=>{
+  const fs=require("node:fs");
+  for(const filename of ["ipad-kiosk-dashboard.yaml","premium-dashboard.yaml"]){
+    const source=fs.readFileSync(require("node:path").join(__dirname,"../examples",filename),"utf8");
+    const primary=source.split(/^  - title: Samlet$/m)[0];
+    assert.match(primary,/type: sections/,"The first view must use HA native Sections: "+filename);
+    assert.match(primary,/max_columns: 3/);
+    const nativeSections=(primary.match(/^      - type: grid$/gm)||[]).length;
+    assert.equal(nativeSections,7,"Seven actual HA sections are required: "+filename);
+    const moduleCards=(primary.match(/^          - type: custom:athlth-[a-z-]+-card$/gm)||[]).length;
+    assert.equal(moduleCards,20,"Use individual ATHLTH cards, not one combined dashboard: "+filename);
+    const sectionsHeadings=(primary.match(/^          - type: heading$/gm)||[]).length;
+    assert.equal(sectionsHeadings,7);
+    const fullWidth=(primary.match(/^              columns: 12$/gm)||[]).length;
+    assert.equal(fullWidth,20);
+    assert.doesNotMatch(primary,/type: custom:athlth-dashboard-card/);
+    assert.doesNotMatch(primary,/panel: true/);
+    assert.doesNotMatch(source,/^\s*(hide_sidebar|hide_header): true$/m);
+    assert.match(source,/^  - title: Samlet$/m,"Existing combined view remains available");
+  }
+});
