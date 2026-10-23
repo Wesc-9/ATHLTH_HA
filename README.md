@@ -199,6 +199,44 @@ integration, with no external CDN and no fake workout data.
 
 For a complete dashboard see [examples/premium-dashboard.yaml](examples/premium-dashboard.yaml).
 
+### iPad Home Assistant: actual Sections layout (sidebar stays visible)
+
+If your iPad only shows **one card across**, the cause may be that you
+installed `custom:athlth-dashboard-card` as **one outer card** instead of
+adding multiple independent cards to Home Assistant's native Sections
+layout. A new HACS integration release alone does **not** replace an
+already saved dashboard's Lovelace configuration.
+
+**Use the corrected templates directly:**
+
+- [ATHLTH iPad — 7 actual HA sections, 20 cards](examples/ipad-kiosk-dashboard.yaml)
+- [ATHLTH premium — defaults to the same native sections](examples/premium-dashboard.yaml)
+
+Both templates now start with `type: sections`, `max_columns: 3`, and
+multiple `sections: - type: grid` entries. Each group includes separate,
+reorderable ATHLTH modular cards. The optional **Samlet** view retains
+the previous large combined card as a fallback.
+
+**To apply in Home Assistant:** Create/edit a *user-managed* ATHLTH
+dashboard, choose **Edit dashboard → three-dot menu → Raw configuration
+editor** (or choose a new Sections view and add the cards in the UI),
+then paste the YAML for the chosen example. Backup existing YAML first.
+Set **Show in sidebar** for the ATHLTH dashboard. If your installation
+uses a different last-workout sensor entity ID, replace
+`sensor.athlth_last_workout` with the real ID. Ensure the required
+ATHLTH modular cards are installed via current HACS.
+
+Do not enable `hide_sidebar`, `hide_header`, or a third-party kiosk
+plugin's fullscreen mode; this layout keeps Home Assistant's left menu
+and navigation accessible. The actual number of native section columns
+depends on space remaining **after** the sidebar: wide landscape iPads
+may show three, other widths two or one. `max_columns: 3` is an upper
+limit, **not** a guarantee of three on all iPads.
+
+**Deployment boundary:** Editing GitHub YAML does not reach your live
+Home Assistant config or force its tablet app to adopt these sections;
+you must import the new view to your dashboard.
+
 ### ATHLTH 0.7.0 — completed-strength progression and precise exercise comparisons
 
 ATHLTH Training Intelligence now supports **actual logged completed
