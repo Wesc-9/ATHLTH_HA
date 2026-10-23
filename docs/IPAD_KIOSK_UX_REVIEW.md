@@ -7,11 +7,23 @@ product review, not a claim of observed real-device behavior.
 
 ## Product decision
 
-Use a separate **ATHLTH Kiosk** dashboard with a single full-width Panel view
-and one `custom:athlth-dashboard-card` configured with `kiosk: true`.
-**Keep Home Assistant's left sidebar and header available.** The separate
-ATHLTH kiosk layout changes only elements inside its own shadow DOM. It never
-hides HA navigation, account controls, dashboards or access to settings.
+Use a separate **ATHLTH iPad** dashboard with a **native Home Assistant
+Sections view**, `max_columns: 3`, seven section groups and 20 independent
+ATHLTH Lovelace cards. This solves the recurring one-column appearance
+**structurally**, rather than hoping a single combined Panel card reaches
+a particular CSS width. Home Assistant owns the responsive arrangement.
+The legacy combined card remains in the second **Samlet** Panel view.
+
+**Keep Home Assistant's left sidebar and header available.** Do not hide
+the native navigation or account controls. No external kiosk plugin is
+needed for this native multi-section layout.
+
+The exact number of simultaneously visible sections depends on *actual*
+available iPad content width after subtracting the HA sidebar. With a
+visible sidebar, three sections may require a large landscape window;
+two columns may be the appropriate layout on an ordinary iPad. The
+integration must not claim that three columns are possible in portrait
+or narrow Split View without enough pixels.
 
 A third-party Kiosk Mode plugin is **not needed** for this presentation.
 If that plugin is independently installed, do **not** enable its `kiosk` or
@@ -53,12 +65,14 @@ entities and updated ATHLTH values. Real iPad verification is still required.
 Assistant Masonry card column. The dashboard grid responds to the **card's
 allocated width**, not the physical iPad's nominal screen dimensions.
 
-**Change:** use `panel: true` in the separate view. Sections also now
-receive full-width `getGridOptions` hints (12 columns). Normal layouts
-provide three columns at 790+ CSS px, two at 620–789, one below. The
-kiosk-specific density supports three columns from 720 CSS px when sensible.
-Available width is lower if the HA sidebar is visible. Two columns are
-therefore the sensible default for iPad portrait / narrow Split View.
+**Change:** the primary overview is now `type: sections` with
+seven **real HA sections**, each containing multiple *separate* modular
+ATHLTH cards. The view sets `max_columns: 3`; HA chooses 1–3 visible
+section columns based on available content width. Each individual
+custom card uses `grid_options: {columns: 12, rows: auto}` within its
+section. The previous combined `panel` remains only as the optional
+**Samlet** fallback. A sidebar-constrained window can physically fit
+fewer columns, regardless of max_columns.
 
 ### P0 — Keep left navigation and a safe way out (implemented)
 
@@ -67,9 +81,10 @@ menu button and a normal non-kiosk dashboard. Never apply `hide_sidebar:
 true` or `kiosk: true` to the unrelated third-party Kiosk Mode plugin.
 The ATHLTH `kiosk: true` option is an internal card styling switch.
 
-**Operations:** create a new HA dashboard, select *Show in sidebar* through
-HA's dashboard settings, and paste the versioned kiosk example into the
-raw dashboard editor. It is not deployed remotely by changing GitHub.
+**Operations:** create a new HA dashboard or edit a user-managed one,
+select *Show in sidebar* through HA's dashboard settings, and paste the
+versioned **Sections** YAML into the raw dashboard editor. Changes made
+on GitHub do **not** modify an existing locally saved HA dashboard.
 
 ## Overview hierarchy and interface recommendations
 
@@ -92,9 +107,10 @@ more detail without drowning in dozens of similarly weighted tiles.
 6. **Secondary detail view:** focused modular session, feed, achievements,
    week and data cards, leaving the main kiosk view easy to scan.
 
-Implemented here: an optional in-card kiosk look and five accessible
-touch-target jump controls that scroll to a specific section. The normal
-non-kiosk dashboard is unchanged.
+Implemented here: a real native Sections homepage and an optional legacy
+combined dashboard with in-card navigation. The card's `kiosk: true`
+attribute does not activate any Home Assistant shell-hiding kiosk plugin.
+Both example dashboards now default to native Sections.
 
 ## Missing use cases — evaluated and prioritized
 
@@ -122,14 +138,15 @@ that a data gap is a missed workout, or forced family leaderboards.
 ## iPad behavior acceptance checklist
 
 1. In the HA iPad app, open *ATHLTH Kiosk* from the **visible left sidebar**.
-2. Confirm that the HA header/menu icon is available and the card uses all
-   space beside the sidebar. For iPads with 720+ CSS px **actual content
-   width**, the kiosk card should show three columns; narrower windows may
-   show two or one, not clipped cards.
+2. Confirm the first view has seven native HA Sections and not one
+   `custom:athlth-dashboard-card`. The HA menu remains available.
+   Check how many section columns physically fit with the sidebar
+   visible; narrow iPad screens can correctly show only one column.
 3. Scroll midway through the session feed, generate a real HA sensor update
    or update an unrelated light sensor, and check the position remains stable.
-4. Tap each in-card jump control and confirm that the relevant section is
-   reached, not a different HA dashboard.
+4. Confirm the six-plus named section headings are distinct and cards
+   can be rearranged individually in HA's Sections editor. Check that
+   the optional `Samlet` tab still opens the combined dashboard.
 5. Repeat with a newly completed run, a treadmill workout with **no** route
    and a strength session. The last outdoor route image must not carry over.
 6. Rotate iPad; then use Split View / Stage Manager and close/open the sidebar.
