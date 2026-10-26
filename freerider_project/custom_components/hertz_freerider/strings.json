@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hertz Freerider",
+        "description": "Choose countries and optionally filter by departure and arrival station. Listing feeds are not yet implemented.",
+        "data": {
+          "countries": "Countries",
+          "origin": "From (optional)",
+          "destination": "To (optional)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Hertz Freerider is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Freerider route filters",
+        "data": {
+          "countries": "Countries",
+          "origin": "From (optional)",
+          "destination": "To (optional)"
+        }
+      }
+    }
+  }
+}
