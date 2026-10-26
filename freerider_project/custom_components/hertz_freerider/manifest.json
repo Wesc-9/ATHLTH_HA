@@ -1,0 +1,14 @@
+{
+  "domain": "hertz_freerider",
+  "name": "Hertz Freerider (prototype)",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/Wesc-9/ATHLTH_HA/tree/feature/hertz-freerider-multicountry/freerider_project",
+  "issue_tracker": "https://github.com/Wesc-9/ATHLTH_HA/issues",
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "integration_type": "service",
+  "codeowners": [
+    "@Wesc-9"
+  ]
+}
