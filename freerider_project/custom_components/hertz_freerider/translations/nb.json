@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hertz Freerider",
+        "description": "Velg land og eventuelt filtrering på avreise- og ankomststed. Datakildene er ennå ikke implementert.",
+        "data": {
+          "countries": "Land",
+          "origin": "Fra (valgfritt)",
+          "destination": "Til (valgfritt)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Hertz Freerider er allerede konfigurert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Freerider rutefilter",
+        "data": {
+          "countries": "Land",
+          "origin": "Fra (valgfritt)",
+          "destination": "Til (valgfritt)"
+        }
+      }
+    }
+  }
+}
