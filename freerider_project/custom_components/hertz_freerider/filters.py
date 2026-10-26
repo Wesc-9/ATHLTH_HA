@@ -18,7 +18,8 @@ class Ride:
 
 def normalize(text: str) -> str:
     """Casefold and ignore simple accents for robust town matches."""
-    text = unicodedata.normalize("NFKD", text or "")
+    text = (text or "").translate(str.maketrans({"ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "å": "a", "Å": "A"}))
+    text = unicodedata.normalize("NFKD", text)
     return "".join(c for c in text if not unicodedata.combining(c)).casefold().strip()
 
 
